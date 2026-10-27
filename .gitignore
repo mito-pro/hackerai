@@ -32,6 +32,21 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# banco local (SQLite)
+data/*.db
+data/*.db-wal
+data/*.db-shm
+
+# logs de execucao do servidor
+data/*.log
+
+# saidas do modo OMEGA (modelos decensored e logs do Heretic)
+data/omega/
+
+# repo do Heretic clonado localmente (0xSojalSec/Uncensored-AI)
+tools/Uncensored-AI/
 
 # vercel
 .vercel

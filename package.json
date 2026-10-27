@@ -1,27 +1,46 @@
 {
-  "name": "099",
-  "version": "0.1.0",
+  "name": "hackerai-nexus",
+  "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "omega:setup": "node scripts/omega-setup.mjs",
+    "omega:decensor": "node scripts/omega-decensor.mjs",
+    "omega:ollama": "node scripts/omega-ollama.mjs"
   },
   "dependencies": {
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
-    "next": "15.5.28"
+    "@ai-sdk/google": "^2.0.106",
+    "@ai-sdk/groq": "^2.0.59",
+    "@ai-sdk/openai-compatible": "^1.0.59",
+    "@ai-sdk/react": "^2.0.285",
+    "ai": "^5.0.282",
+    "clsx": "^2.1.1",
+    "next": "15.5.28",
+    "nodemailer": "^10.2.1",
+    "react": "^19.1.10",
+    "react-dom": "^19.1.10",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "tailwind-merge": "^3.7.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
-    "typescript": "^5",
-    "@types/node": "^20",
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^24.19.2",
+    "@types/nodemailer": "^8.0.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@tailwindcss/postcss": "^4",
-    "tailwindcss": "^4",
     "eslint": "^9",
     "eslint-config-next": "15.5.28",
-    "@eslint/eslintrc": "^3"
+    "tailwindcss": "^4",
+    "typescript": "^5"
   }
 }

@@ -1,26 +1,411 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --color-ink: #04070a;
+  --color-panel: #0a1016;
+  --color-panel-2: #0d151d;
+  --color-line: #17262f;
+  --color-neon: #00ff9c;
+  --color-neon-soft: #0f6d4d;
+  --color-amber: #ffb347;
+  --color-danger: #ff4d6d;
+  --color-info: #4dabf7;
+  --color-muted: #7d8f9b;
+  --color-text: #d7e3ea;
+
+  --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", Consolas,
+    "Courier New", monospace;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  box-sizing: border-box;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  min-height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  background-color: var(--color-ink);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(0, 255, 156, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 255, 156, 0.045) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: radial-gradient(ellipse at 50% 0%, black 35%, transparent 85%);
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0px,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 0, 0, 0.18) 3px,
+    rgba(0, 0, 0, 0) 4px
+  );
+  opacity: 0.55;
+}
+
+main,
+body > div {
+  position: relative;
+  z-index: 2;
+}
+
+::selection {
+  background: rgba(0, 255, 156, 0.28);
+  color: #eafff5;
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-track {
+  background: #060a0e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #14342a;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-neon-soft);
+}
+
+.panel {
+  background: linear-gradient(180deg, rgba(13, 21, 29, 0.96), rgba(8, 13, 18, 0.96));
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px rgba(0, 255, 156, 0.03), 0 18px 40px rgba(0, 0, 0, 0.45);
+}
+
+.panel-flat {
+  background: rgba(10, 16, 22, 0.85);
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+}
+
+.neon {
+  color: var(--color-neon);
+  text-shadow: 0 0 10px rgba(0, 255, 156, 0.45);
+}
+
+.glow-box {
+  box-shadow:
+    0 0 0 1px rgba(0, 255, 156, 0.25),
+    0 0 22px rgba(0, 255, 156, 0.12);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--color-line);
+  background: rgba(16, 26, 34, 0.9);
+  color: var(--color-text);
+  padding: 9px 14px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--color-neon-soft);
+  color: var(--color-neon);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: rgba(0, 255, 156, 0.12);
+  border-color: rgba(0, 255, 156, 0.45);
+  color: var(--color-neon);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: rgba(0, 255, 156, 0.2);
+  box-shadow: 0 0 18px rgba(0, 255, 156, 0.2);
+}
+
+.btn-danger {
+  border-color: rgba(255, 77, 109, 0.45);
+  color: var(--color-danger);
+}
+
+.btn-danger:hover:not(:disabled) {
+  border-color: var(--color-danger);
+  color: #ff8ea1;
+}
+
+.btn-xs {
+  padding: 5px 9px;
+  font-size: 11px;
+}
+
+.input {
+  width: 100%;
+  background: rgba(4, 8, 11, 0.85);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  color: var(--color-text);
+  padding: 10px 12px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input:focus {
+  border-color: var(--color-neon-soft);
+  box-shadow: 0 0 0 1px rgba(0, 255, 156, 0.2);
+}
+
+.label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  margin-bottom: 6px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  border: 1px solid var(--color-line);
+  padding: 3px 9px;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.badge-neon {
+  border-color: rgba(0, 255, 156, 0.4);
+  color: var(--color-neon);
+  background: rgba(0, 255, 156, 0.08);
+}
+
+.badge-amber {
+  border-color: rgba(255, 179, 71, 0.4);
+  color: var(--color-amber);
+  background: rgba(255, 179, 71, 0.08);
+}
+
+.badge-danger {
+  border-color: rgba(255, 77, 109, 0.4);
+  color: var(--color-danger);
+  background: rgba(255, 77, 109, 0.08);
+}
+
+.badge-muted {
+  color: var(--color-muted);
+}
+
+.meter {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+
+.meter > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #0f6d4d, var(--color-neon));
+  transition: width 0.4s ease;
+}
+
+.meter.warn > span {
+  background: linear-gradient(90deg, #8a5a10, var(--color-amber));
+}
+
+.meter.danger > span {
+  background: linear-gradient(90deg, #7a1d31, var(--color-danger));
+}
+
+.terminal-caret::after {
+  content: "_";
+  color: var(--color-neon);
+  animation: blink 1.1s steps(2, start) infinite;
+}
+
+@keyframes blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+@keyframes scan {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(100vh);
+  }
+}
+
+.scanline {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 140px;
+  pointer-events: none;
+  z-index: 3;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 255, 156, 0) 0%,
+    rgba(0, 255, 156, 0.06) 50%,
+    rgba(0, 255, 156, 0) 100%
+  );
+  animation: scan 7s linear infinite;
+}
+
+.prose-nexus p {
+  margin: 0 0 10px;
+}
+
+.prose-nexus ul,
+.prose-nexus ol {
+  margin: 0 0 10px 18px;
+  list-style: disc;
+}
+
+.prose-nexus ol {
+  list-style: decimal;
+}
+
+.prose-nexus h1,
+.prose-nexus h2,
+.prose-nexus h3 {
+  color: var(--color-neon);
+  margin: 14px 0 8px;
+  font-weight: 600;
+}
+
+.prose-nexus h1 {
+  font-size: 17px;
+}
+
+.prose-nexus h2 {
+  font-size: 15px;
+}
+
+.prose-nexus h3 {
+  font-size: 14px;
+}
+
+.prose-nexus a {
+  color: var(--color-info);
+  text-decoration: underline;
+}
+
+.prose-nexus blockquote {
+  border-left: 2px solid var(--color-neon-soft);
+  padding-left: 12px;
+  color: var(--color-muted);
+  margin: 0 0 10px;
+}
+
+.prose-nexus code {
+  background: rgba(0, 255, 156, 0.08);
+  color: #8dffc6;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12.5px;
+}
+
+.prose-nexus pre {
+  background: #05090d;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  padding: 12px;
+  overflow-x: auto;
+  margin: 0 0 12px;
+}
+
+.prose-nexus pre code {
+  background: transparent;
+  color: #d7e3ea;
+  padding: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.code-block {
+  position: relative;
+  margin: 0 0 12px;
+}
+
+.code-copy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.code-block:hover .code-copy {
+  opacity: 1;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+th,
+td {
+  border: 1px solid var(--color-line);
+  padding: 8px 10px;
+  text-align: left;
+}
+
+th {
+  color: var(--color-neon);
+  background: rgba(0, 255, 156, 0.05);
+}
+
+input[type="checkbox"] {
+  accent-color: var(--color-neon);
 }

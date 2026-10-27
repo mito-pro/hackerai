@@ -1,102 +1,431 @@
+"use client";
+
+import Link from "next/link";
 import Image from "next/image";
+import { useEffect, useState } from "react";
+import { formatCurrency, formatNumber, readJsonSafe } from "@/lib/utils";
+import type { Plan } from "@/lib/plans";
+
+const BENEFITS = [
+  {
+    title: "Acesso seguro",
+    text: "Autenticacao por codigo de verificacao, com foco na protecao das contas dos usuarios.",
+  },
+  {
+    title: "Experiencia inteligente",
+    text: "Recursos de conversacao voltados para esclarecer duvidas, criar conteudos, analisar informacoes e auxiliar em diferentes tarefas.",
+  },
+  {
+    title: "Gestao de utilizacao",
+    text: "Controle de consumo por usuario, com limites e planos configuraveis para uma administracao organizada.",
+  },
+  {
+    title: "Interface moderna",
+    text: "Design responsivo, navegacao intuitiva e experiencia adaptada para computadores e dispositivos moveis.",
+  },
+  {
+    title: "Eficiencia operacional",
+    text: "Ferramentas reunidas em um unico ambiente para simplificar processos e aumentar a produtividade.",
+  },
+  {
+    title: "Evolucao continua",
+    text: "Estrutura flexivel, preparada para receber melhorias, novas funcionalidades e aprimoramentos tecnologicos.",
+  },
+];
+
+const STEPS = [
+  {
+    n: "01",
+    title: "Informe o e-mail",
+    text: "O sistema gera um codigo OTP de 6 digitos com validade de 10 minutos.",
+  },
+  {
+    n: "02",
+    title: "Valide o codigo",
+    text: "A sessao httpOnly e criada e o primeiro usuario registrado vira administrador.",
+  },
+  {
+    n: "03",
+    title: "Use o terminal",
+    text: "Escolha o modelo, converse e acompanhe o consumo de tokens em tempo real.",
+  },
+];
+
+type PublicUser = {
+  id: string;
+  email: string;
+  role: "user" | "admin";
+};
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [user, setUser] = useState<PublicUser | null>(null);
+  const [plans, setPlans] = useState<Plan[]>([]);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
+  useEffect(() => {
+    let active = true;
+
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((response) =>
+        response.ok
+          ? readJsonSafe<{ user?: PublicUser }>(response)
+          : Promise.resolve(null)
+      )
+      .then((data) => {
+        if (active && data?.user) setUser(data.user);
+      })
+      .catch(() => undefined);
+
+    fetch("/api/plans", { cache: "no-store" })
+      .then((response) =>
+        response.ok
+          ? readJsonSafe<{ plans?: Plan[] }>(response)
+          : Promise.resolve(null)
+      )
+      .then((data) => {
+        if (active && Array.isArray(data?.plans)) setPlans(data.plans);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return (
+    <div className="min-h-screen">
+      <header className="sticky top-0 z-20 border-b border-line bg-ink/80 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3">
+          <Link href="/" className="flex items-center gap-2">
             <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+              src="/emblem-hackerai.png"
+              alt="HACKER AI"
+              width={36}
+              height={36}
+              className="size-9 rounded-md"
+              priority
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            <span className="text-sm font-semibold tracking-[0.3em] text-neon">
+              HACKER<span className="text-text">_AI</span>
+            </span>
+            <span className="badge badge-muted hidden sm:inline-flex">NEXUS</span>
+          </Link>
+
+          <nav className="flex items-center gap-2">
+            <a href="#planos" className="btn btn-xs hidden sm:inline-flex">
+              Planos
+            </a>
+            <a href="#beneficios" className="btn btn-xs hidden md:inline-flex">
+              Beneficios
+            </a>
+            {user ? (
+              <>
+                <Link href="/chat/" className="btn btn-xs btn-primary">
+                  Terminal
+                </Link>
+                {user.role === "admin" ? (
+                  <Link href="/admin/" className="btn btn-xs">
+                    Admin
+                  </Link>
+                ) : null}
+              </>
+            ) : (
+              <Link href="/login/" className="btn btn-xs btn-primary">
+                Entrar
+              </Link>
+            )}
+          </nav>
         </div>
+      </header>
+
+      <main className="mx-auto max-w-6xl px-5">
+        <section className="grid gap-10 py-16 md:grid-cols-[1.1fr_0.9fr] md:items-center md:py-24">
+          <div>
+            <p className="badge badge-neon mb-5">
+              v1.0 :: plataforma de inteligencia artificial
+            </p>
+            <h1 className="text-4xl leading-tight font-semibold md:text-5xl">
+              <span className="neon">HACKER_AI</span>
+              <br />
+              <span className="text-text">NEXUS</span>
+            </h1>
+            <p className="text-neon mt-4 text-xs tracking-[0.2em] uppercase md:text-sm">
+              Inteligencia artificial. Produtividade. Controle.
+            </p>
+            <p className="text-muted mt-5 max-w-xl text-sm md:text-base">
+              O HACKER_AI NEXUS e uma plataforma inteligente de conversacao
+              idealizada e desenvolvida por{" "}
+              <span className="text-neon">Mistico Virus</span>, criada para
+              oferecer uma experiencia moderna, segura e eficiente de interacao
+              com inteligencia artificial. Com uma interface intuitiva e recursos
+              avancados, a plataforma reuni ferramentas para simplificar tarefas,
+              organizar informacoes e otimizar o fluxo de trabalho em um unico
+              ambiente digital.
+            </p>
+
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link href={user ? "/chat/" : "/login/"} className="btn btn-primary">
+                {user ? "Abrir terminal" : "Entrar com OTP"}
+              </Link>
+              <a href="#planos" className="btn">
+                Ver planos
+              </a>
+            </div>
+
+            <dl className="mt-10 grid grid-cols-3 gap-3">
+              {[
+                { k: "5", v: "provedores" },
+                { k: "3", v: "planos" },
+                { k: "100%", v: "self-hosted" },
+              ].map((item) => (
+                <div key={item.v} className="panel-flat px-3 py-2">
+                  <dt className="text-neon text-lg font-semibold">{item.k}</dt>
+                  <dd className="text-muted text-[11px] tracking-[0.14em] uppercase">
+                    {item.v}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+
+          <div className="panel glow-box overflow-hidden">
+            <div className="flex items-center gap-2 border-b border-line px-4 py-2">
+              <span className="size-2 rounded-full bg-danger" />
+              <span className="size-2 rounded-full bg-amber" />
+              <span className="size-2 rounded-full bg-neon" />
+              <span className="text-muted ml-2 text-[11px] tracking-[0.2em]">
+                nexus@shell:~
+              </span>
+            </div>
+            <pre className="overflow-x-auto p-4 text-[12.5px] leading-relaxed">
+              <code>
+                {`$ npx hacker-ai --start
+[ok] banco local ........ sqlite (data/hackerai.db)
+[ok] sessao ............. httpOnly + hash sha-256
+[ok] otp ................ 6 digitos / 10 min
+[ok] provedores ......... groq, google, openrouter, ollama
+[ok] motor local ........ nexus-core offline
+
+> conectando ao nucleo...
+> pronto. digite /help para os comandos.`}
+                <span className="text-neon">█</span>
+              </code>
+            </pre>
+          </div>
+        </section>
+
+        <section id="beneficios" className="scroll-mt-20 py-10">
+          <h2 className="text-neon text-xl tracking-[0.2em] uppercase">
+            [ principais beneficios ]
+          </h2>
+          <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {BENEFITS.map((benefit) => (
+              <article key={benefit.title} className="panel p-5">
+                <h3 className="text-neon text-sm tracking-[0.12em] uppercase">
+                  {benefit.title}
+                </h3>
+                <p className="text-muted mt-2 text-[13px]">{benefit.text}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="py-14">
+          <div className="panel p-6 md:p-8">
+            <h2 className="text-neon text-xl tracking-[0.2em] uppercase">
+              [ sobre o projeto ]
+            </h2>
+
+            <div className="mt-6 space-y-6">
+              <div>
+                <h3 className="text-neon text-sm tracking-[0.12em] uppercase">
+                  Tecnologia e confiabilidade
+                </h3>
+                <p className="text-muted mt-2 text-[13px]">
+                  Desenvolvido com foco em organizacao, desempenho e
+                  escalabilidade, o HACKER_AI NEXUS busca oferecer uma
+                  experiencia consistente, com recursos de gerenciamento e uma
+                  estrutura preparada para acompanhar a evolucao das
+                  necessidades dos usuarios.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-neon text-sm tracking-[0.12em] uppercase">
+                  Sobre o criador
+                </h3>
+                <p className="text-muted mt-2 text-[13px]">
+                  <span className="text-neon">Mistico Virus</span> - Criador do
+                  HACKER_AI NEXUS. Por meio de uma visao voltada a tecnologia,
+                  inovacao e desenvolvimento de solucoes digitais, Mistico Virus
+                  idealizou o projeto com o objetivo de tornar a inteligencia
+                  artificial mais acessivel, pratica e util no dia a dia.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-neon text-sm tracking-[0.12em] uppercase">
+                  Uma nova forma de trabalhar com IA
+                </h3>
+                <p className="text-muted mt-2 text-[13px]">
+                  Mais do que um chatbot, o HACKER_AI NEXUS representa uma
+                  proposta de inovacao digital: unir inteligencia artificial,
+                  praticidade e controle em uma plataforma moderna, desenvolvida
+                  para ampliar possibilidades e facilitar tarefas.
+                </p>
+              </div>
+            </div>
+
+            <p className="text-muted mt-6 border-t border-line pt-4 text-[12.5px] italic">
+              HACKER_AI NEXUS - Tecnologia inteligente para ir alem. Criado por
+              Mistico Virus.
+            </p>
+          </div>
+        </section>
+
+        <section className="py-14">
+          <h2 className="text-neon text-xl tracking-[0.2em] uppercase">
+            [ como funciona ]
+          </h2>
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            {STEPS.map((step) => (
+              <div key={step.n} className="panel-flat p-5">
+                <span className="text-neon text-2xl font-semibold">{step.n}</span>
+                <h3 className="mt-2 text-sm tracking-[0.12em] uppercase">
+                  {step.title}
+                </h3>
+                <p className="text-muted mt-1 text-[13px]">{step.text}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section id="planos" className="scroll-mt-20 py-10">
+          <h2 className="text-neon text-xl tracking-[0.2em] uppercase">
+            [ planos ]
+          </h2>
+          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {plans.map((plan) => (
+              <div
+                key={plan.id}
+                className={`panel flex flex-col p-6 ${
+                  plan.id === "pro" || plan.id === "nexus-omega"
+                    ? "glow-box"
+                    : ""
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-neon text-lg tracking-[0.2em]">
+                    {plan.name}
+                  </h3>
+                  {plan.isDefault ? (
+                    <span className="badge badge-neon">padrao</span>
+                  ) : null}
+                </div>
+                {plan.category ? (
+                  <span className="badge badge-amber mt-2 self-start">
+                    {plan.category}
+                  </span>
+                ) : null}
+                <p className="text-muted mt-1 text-[12.5px]">{plan.description}</p>
+                <p className="mt-4 text-2xl font-semibold">
+                  {plan.price === 0 ? "R$ 0" : formatCurrency(plan.price)}
+                  <span className="text-muted text-xs"> /mes</span>
+                </p>
+                <ul className="text-muted mt-4 flex-1 space-y-1 text-[13px]">
+                  <li>
+                    <span className="text-neon">-</span>{" "}
+                    {formatNumber(plan.monthlyTokens)} tokens/mês
+                  </li>
+                  <li>
+                    <span className="text-neon">-</span> {plan.dailyMessages}{" "}
+                    mensagens/dia
+                  </li>
+                  <li>
+                    <span className="text-neon">-</span> contexto{" "}
+                    {formatNumber(plan.maxContext)} tokens
+                  </li>
+                  {plan.features.map((feature) => (
+                    <li key={feature}>
+                      <span className="text-neon">-</span> {feature}
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href="/login/"
+                  className={`btn mt-5 ${
+                    plan.id === "pro" || plan.id === "nexus-omega"
+                      ? "btn-primary"
+                      : ""
+                  }`}
+                >
+                  {plan.price === 0 ? "Entrar no terminal" : `Solicitar ${plan.name}`}
+                </Link>
+              </div>
+            ))}
+          </div>
+          <p className="text-muted mt-4 text-[12px]">
+            Precos informativos: a troca de plano e feita pelo administrador em
+            <span className="text-neon">{" Admin > Usuarios"}</span>. Nao ha
+            cobranca automatica nesta versao.
+          </p>
+        </section>
+
+        <section className="py-14">
+          <div className="panel p-6">
+            <h2 className="text-neon text-xl tracking-[0.2em] uppercase">
+              [ apis gratuitas ]
+            </h2>
+            <p className="text-muted mt-2 text-[13px]">
+              As chaves sao cadastradas pelo administrador em
+              <span className="text-neon">{" Admin > Provedores"}</span> e
+              gravadas criptografadas no banco (AES-256-GCM).
+            </p>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                {
+                  name: "Groq",
+                  models: "Llama 3.3 70B / 3.1 8B",
+                  where: "console.groq.com",
+                },
+                {
+                  name: "Google Gemini",
+                  models: "Gemini 2.0 Flash",
+                  where: "aistudio.google.com",
+                },
+                {
+                  name: "OpenRouter",
+                  models: "DeepSeek + Llama :free",
+                  where: "openrouter.ai/keys",
+                },
+                {
+                  name: "Ollama",
+                  models: "modelo local do PC",
+                  where: "ollama.com/download",
+                },
+              ].map((provider) => (
+                <div key={provider.name} className="panel-flat p-4">
+                  <p className="text-neon text-sm tracking-[0.12em] uppercase">
+                    {provider.name}
+                  </p>
+                  <p className="text-muted mt-1 text-[12.5px]">{provider.models}</p>
+                  <p className="text-neon/70 mt-2 text-[11px]">{provider.where}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
+
+      <footer className="border-t border-line py-8">
+        <div className="text-muted mx-auto flex max-w-6xl flex-col gap-2 px-5 text-[12px] sm:flex-row sm:items-center sm:justify-between">
+          <p>
+            HACKER_AI :: NEXUS - plataforma de IA auto-hospedada. Criado por
+            Mistico Virus.
+          </p>
+          <p>
+            Base: vercel/ai-chatbot (Apache-2.0) + AI SDK + Next.js + SQLite.
+          </p>
+        </div>
       </footer>
     </div>
   );
