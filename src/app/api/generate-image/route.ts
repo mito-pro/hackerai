@@ -16,6 +16,9 @@ type ImageBody = {
   height?: number;
 };
 
+const NVIDIA_IMAGE_BASE = "https://integrate.api.nvidia.com/v1/generations";
+const RUNPI_IMAGE_BASE = "https://runapi.ai/v1";
+
 export const POST = apiHandler(async (request: Request) => {
   let body: ImageBody;
   try {
@@ -51,34 +54,76 @@ export const POST = apiHandler(async (request: Request) => {
   }
 
   const keys = await getProviderKeys();
-  if (!keys.nvidia) {
-    return NextResponse.json(
-      { error: "provider_missing", message: "NVIDIA API key nao configurada." },
-      { status: 400 }
-    );
-  }
-
-  const modelId = body.model ?? "nvidia/nemotron-3.5-super-vl-120b-a12b";
+  const modelId = body.model ?? "nvidia/sdxl";
 
   try {
-    const response = await fetch(
-      "https://integrate.api.nvidia.com/v1/generations",
-      {
+    if (modelId.startsWith("runapi/")) {
+      if (!keys.runapi) {
+        return NextResponse.json(
+          { error: "provider_missing", message: "RunAPI chave nao configurada." },
+          { status: 400 }
+        );
+      }
+      const runapiModel = modelId.replace("runapi/", "");
+      const response = await fetch(`${RUNPI_IMAGE_BASE}/${runapiModel}`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${keys.nvidia}`,
+          Authorization: `Bearer ${keys.runapi}`,
           "Content-Type": "application/json",
           Accept: "application/json",
         },
         body: JSON.stringify({
-          model: modelId,
           prompt: body.prompt,
           width: body.width ?? 1024,
           height: body.height ?? 1024,
         }),
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        return NextResponse.json(
+          { error: "generation_failed", message: `RunAPI HTTP ${response.status}: ${errorText}` },
+          { status: 500 }
+        );
       }
-    );
+      const payload = await response.json();
+      const imageData =
+        payload?.data?.[0]?.b64_json ??
+        payload?.data?.[0]?.url ??
+        payload?.b64_json ??
+        payload?.image_url ??
+        "";
+      if (!imageData) {
+        return NextResponse.json(
+          { error: "generation_failed", message: "RunAPI nao retornou imagem." },
+          { status: 500 }
+        );
+      }
+      const isBase64 = !imageData.startsWith("http");
+      const dataUri = isBase64 ? `data:image/png;base64,${imageData}` : imageData;
+      return NextResponse.json({ ok: true, image: dataUri, mime: "image/png", model: modelId });
+    }
 
+    // NVIDIA (default)
+    if (!keys.nvidia) {
+      return NextResponse.json(
+        { error: "provider_missing", message: "NVIDIA API key nao configurada." },
+        { status: 400 }
+      );
+    }
+    const response = await fetch(NVIDIA_IMAGE_BASE, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${keys.nvidia}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        model: modelId,
+        prompt: body.prompt,
+        width: body.width ?? 1024,
+        height: body.height ?? 1024,
+      }),
+    });
     if (!response.ok) {
       const errorText = await response.text();
       return NextResponse.json(
@@ -86,32 +131,21 @@ export const POST = apiHandler(async (request: Request) => {
         { status: 500 }
       );
     }
-
     const payload = await response.json();
     const imageData =
       payload?.data?.[0]?.b64_json ??
       payload?.data?.[0]?.url ??
       payload?.b64_json ??
       "";
-
     if (!imageData) {
       return NextResponse.json(
         { error: "generation_failed", message: "NVIDIA nao retornou imagem." },
         { status: 500 }
       );
     }
-
     const isBase64 = !imageData.startsWith("http");
-    const base64 = isBase64 ? imageData : "";
-    const mime = isBase64 ? "image/png" : "image/png";
-    const dataUri = isBase64 ? `data:${mime};base64,${base64}` : imageData;
-
-    return NextResponse.json({
-      ok: true,
-      image: dataUri,
-      mime,
-      model: modelId,
-    });
+    const dataUri = isBase64 ? `data:image/png;base64,${imageData}` : imageData;
+    return NextResponse.json({ ok: true, image: dataUri, mime: "image/png", model: modelId });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(

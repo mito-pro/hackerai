@@ -471,6 +471,17 @@ export const MODELS: ModelDef[] = [
     type: "text",
   },
   {
+    id: "nvidia/sdxl",
+    label: "NVIDIA · SDXL 1.0",
+    provider: "nvidia",
+    modelId: "stability-ai/sdxl",
+    context: 4096,
+    requiresKey: true,
+    description: "Stable Diffusion XL 1.0 via NVIDIA NIM para geracao de imagem.",
+    free: false,
+    type: "image",
+  },
+  {
     id: "nvidia/nemotron-3.5-super-vl",
     label: "NVIDIA · Nemotron 3.5 Super VL 120B",
     provider: "nvidia",

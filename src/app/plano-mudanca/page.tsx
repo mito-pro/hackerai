@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { readJsonSafe } from "@/lib/utils";
 
 type Plan = { id: string; name: string; price: number; monthlyTokens: number; dailyMessages: number; maxContext: number; features: string[]; providers: string[]; description?: string };
 
 export default function PlanChangePage() {
+  const router = useRouter();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [currentPlan, setCurrentPlan] = useState<{ id: string; name: string } | null>(null);
   const [selected, setSelected] = useState<string>("");
@@ -67,6 +69,7 @@ export default function PlanChangePage() {
       setMessage("Solicitacao de upgrade enviada. O administrador ira analisar e enviar o codigo de ativacao por e-mail.");
       setSelected("");
       setPixKey("");
+      setTimeout(() => router.push("/ativar-plano/"), 1500);
     } catch {
       setError("Falha de rede ao solicitar upgrade.");
     } finally {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { formatCurrency, readJsonSafe } from "@/lib/utils";
 
 type Plan = {
@@ -25,6 +26,7 @@ type PixConfig = { pixKey: string };
 const PIX_KEY_DISPLAY = "pb-pagamentos@jim.com";
 
 export default function CheckoutPage() {
+  const router = useRouter();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [pixConfig, setPixConfig] = useState<PixConfig | null>(null);
   const [selected, setSelected] = useState<Plan | null>(null);
@@ -93,6 +95,7 @@ export default function CheckoutPage() {
       setMessage(
         `Pagamento criado para o plano ${selected.name} (R$ ${selected.price.toFixed(2)}). Pague usando a chave PIX acima e aguarde o codigo de ativacao por e-mail.`
       );
+      setTimeout(() => router.push("/ativar-plano/"), 1500);
     } catch {
       setError("Falha de rede ao criar pagamento.");
     } finally {
