@@ -16,6 +16,7 @@ type Settings = {
     nvidia: ProviderStatus;
     opencode: ProviderStatus;
     vercel: ProviderStatus;
+    runapi: ProviderStatus;
     ollama: { configured: boolean; baseUrl: string; model: string };
   };
   otp: {
@@ -41,6 +42,7 @@ export default function AdminProvidersPage() {
     nvidia: "",
     opencode: "",
     vercel: "",
+    runapi: "",
     ollamaBaseUrl: "",
     ollamaModel: "",
     smtpHost: "",
@@ -132,6 +134,7 @@ export default function AdminProvidersPage() {
       nvidia: "",
       opencode: "",
       vercel: "",
+      runapi: "",
       smtpPass: "",
     }));
     const refreshed = await fetch("/api/admin/settings", { cache: "no-store" });
@@ -167,6 +170,7 @@ export default function AdminProvidersPage() {
       | "nvidia"
       | "opencode"
       | "vercel"
+      | "runapi"
   ) {
     setMessage("");
     const response = await fetch("/api/admin/settings", {
@@ -448,6 +452,19 @@ export default function AdminProvidersPage() {
           onChange={(value) => setForm({ ...form, vercel: value })}
           onTest={() => test("vercel")}
           onClear={() => clearKey("vercel")}
+        />
+
+        <CompatibleProviderCard
+          title="RunAPI :: video, imagem e audio"
+          hint="runapi.ai :: Kling v2/v3 (video), GPT Image 2, Nano Banana (imagem), Minimax e ElevenLabs (audio)"
+          plans={plansForProvider("runapi")}
+          value={form.runapi}
+          configured={settings?.providers.runapi.configured ?? false}
+          masked={settings?.providers.runapi.masked ?? ""}
+          testResult={tests.runapi}
+          onChange={(value) => setForm({ ...form, runapi: value })}
+          onTest={() => test("runapi")}
+          onClear={() => clearKey("runapi")}
         />
 
         <section className="panel space-y-3 p-5">
