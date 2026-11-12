@@ -312,79 +312,194 @@ export default function Home() {
           </div>
         </section>
 
-        <section id="planos" className="scroll-mt-20 py-8 sm:py-10">
-          <h2 className="text-neon text-xl tracking-[0.2em] uppercase">
-            [ planos ]
-          </h2>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {plans.map((plan) => (
-              <div
-                key={plan.id}
-                className={`panel flex flex-col p-6 sm:p-8 ${
-                  plan.id === "pro" || plan.id === "nexus-omega"
-                    ? "glow-box"
-                    : ""
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-neon text-lg tracking-[0.2em]">
-                    {plan.name}
-                  </h3>
-                  {plan.isDefault ? (
-                    <span className="badge badge-neon">padrao</span>
-                  ) : null}
-                </div>
-                {plan.category ? (
-                  <span className="badge badge-amber mt-2 self-start">
-                    {plan.category}
-                  </span>
-                ) : null}
-                <p className="text-muted mt-1 text-[12.5px]">{plan.description}</p>
-                <p className="mt-4 text-2xl font-semibold">
-                  {plan.price === 0 ? "R$ 0" : formatCurrency(plan.price)}
-                  <span className="text-muted text-xs"> /mes</span>
-                </p>
-                <ul className="text-muted mt-4 flex-1 space-y-1 text-[13px]">
-                  <li>
-                    <span className="text-neon">-</span>{" "}
-                    {formatNumber(plan.monthlyTokens)} tokens/mês
-                  </li>
-                  <li>
-                    <span className="text-neon">-</span> {plan.dailyMessages}{" "}
-                    mensagens/dia
-                  </li>
-                  <li>
-                    <span className="text-neon">-</span> contexto{" "}
-                    {formatNumber(plan.maxContext)} tokens
-                  </li>
-                  <li>
-                    <span className="text-neon">-</span> modelos de IA:{" "}
-                    {planLabel(plan.id, plan.providers)}
-                  </li>
-                  {plan.features.map((feature) => (
-                    <li key={feature}>
-                      <span className="text-neon">-</span> {feature}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  href="/login/"
-                  className={`btn mt-5 sm:mt-6 ${
-                    plan.id === "pro" || plan.id === "nexus-omega"
-                      ? "btn-primary"
-                      : ""
-                  }`}
-                >
-                  {plan.price === 0 ? "Entrar no terminal" : `Solicitar ${plan.name}`}
-                </Link>
-              </div>
-            ))}
+        <section id="planos" className="scroll-mt-20 py-10 sm:py-16">
+          <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-8">
+            <div className="text-center mb-10 sm:mb-14">
+              <h2 className="text-neon text-2xl tracking-[0.25em] uppercase sm:text-3xl font-bold mb-4">
+                [ escolha seu plano ]
+              </h2>
+              <p className="text-muted text-lg sm:text-xl max-w-2xl mx-auto leading-relaxed">
+                Todos os planos incluem o NEXUS Core local. Escolha o nivel de
+                acesso aos modelos de texto, imagem, audio e video que mais
+                combina com voce.
+              </p>
+            </div>
+
+            <div className="grid gap-5 sm:gap-6 lg:gap-8 md:grid-cols-3">
+              {plans.map((plan) => {
+                const isPopular =
+                  plan.id === "pro" || plan.id === "nexus-omega";
+                const isFree = plan.id === "free";
+                const isMax = plan.id === "nexus-full";
+
+                return (
+                  <div
+                    key={plan.id}
+                    className={[
+                      "relative flex flex-col rounded-2xl overflow-hidden border border-line bg-panel hover:border-neon/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_0_30px_rgba(0,255,255,0.15)]",
+                      isPopular ? "ring-1 ring-neon/30" : "",
+                      isMax ? "ring-1 ring-amber/50 bg-gradient-to-b from-panel/90 to-panel" : "",
+                    ].join(" ")}
+                  >
+                    <div className="p-6 sm:p-8">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className={[
+                          "text-xl sm:text-2xl font-bold tracking-tight",
+                          isPopular ? "text-neon" : "text-text",
+                          isMax ? "text-amber" : "",
+                        ].join(" ")}>
+                          {plan.name}
+                        </h3>
+                        {plan.isDefault ? (
+                          <span className="px-2 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase border border-neon/40 text-neon bg-neon/5">
+                            padrao
+                          </span>
+                        ) : null}
+                        {isPopular && (
+                          <span className="px-2 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase border border-amber/40 text-amber bg-amber/5">
+                            mais pedido
+                          </span>
+                        )}
+                      </div>
+                      {plan.category && (
+                        <span className="inline-block px-3 py-1 mb-4 rounded-full border border-line/50 text-[10px] font-semibold tracking-wider uppercase text-muted bg-panel/50 backdrop-blur">
+                          {plan.category}
+                        </span>
+                      )}
+
+                      <div className="mb-6">
+                        <p className="text-[11px] tracking-[0.15em] uppercase text-muted mb-2">
+                          preço por mês
+                        </p>
+                        <div className="flex items-baseline gap-1">
+                          <span className={[
+                            "text-3xl sm:text-4xl font-bold",
+                            isPopular ? "text-neon" : "text-text",
+                            isMax ? "text-amber" : "",
+                          ].join(" ")}>
+                            {plan.price === 0 ? "0" : plan.price}
+                          </span>
+                          <span className="text-muted text-sm font-medium">
+                            {plan.price === 0 ? "gratis" : "R$"}
+                          </span>
+                          <span className="text-muted text-xs font-normal">
+                            {plan.price === 0 ? "" : ",00"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <ul className="space-y-3 mb-8">
+                        <li className="flex items-start gap-2 text-sm text-muted">
+                          <span className="text-neon shrink-0">✓</span>
+                          {formatNumber(plan.monthlyTokens)} tokens / mês
+                        </li>
+                        <li className="flex items-start gap-2 text-sm text-muted">
+                          <span className="text-neon shrink-0">✓</span>
+                          {plan.dailyMessages} mensagens / dia
+                        </li>
+                        <li className="flex items-start gap-2 text-sm text-muted">
+                          <span className="text-neon shrink-0">✓</span>
+                          contexto de {formatNumber(plan.maxContext)} tokens
+                        </li>
+                        <li className="flex items-start gap-2 text-sm text-muted">
+                          <span className="text-neon shrink-0">✓</span>
+                          modelos de IA:
+                          <br />
+                          <span className="ml-6 text-[11px] text-neon/80 leading-tight">
+                            {planLabel(plan.id, plan.providers)}
+                          </span>
+                        </li>
+                        {plan.historyDays > 0 ? (
+                          <li className="flex items-start gap-2 text-sm text-muted">
+                            <span className="text-neon shrink-0">✓</span>
+                            histórico de {plan.historyDays} dias
+                          </li>
+                        ) : null}
+                        {plan.capabilities.includes("multi_session") && (
+                          <li className="flex items-start gap-2 text-sm text-muted">
+                            <span className="text-neon shrink-0">✓</span>
+                            sessoes simultaneas
+                          </li>
+                        )}
+                        {plan.capabilities.includes("export_chat") && (
+                          <li className="flex items-start gap-2 text-sm text-muted">
+                            <span className="text-neon shrink-0">✓</span>
+                            exportar conversas
+                          </li>
+                        )}
+                        {plan.capabilities.includes("priority_queue") && (
+                          <li className="flex items-start gap-2 text-sm text-muted">
+                            <span className="text-neon shrink-0">✓</span>
+                            fila prioritaria
+                          </li>
+                        )}
+                        {plan.capabilities.includes("uncensored") && (
+                          <li className="flex items-start gap-2 text-sm text-muted">
+                            <span className="text-neon shrink-0">✓</span>
+                            modelos sem censura
+                          </li>
+                        )}
+                      </ul>
+
+                      {plan.features.length > 0 && (
+                        <div className="mb-8">
+                          <p className="text-[10px] tracking-[0.12em] uppercase text-muted mb-3">
+                            recursos adicionais
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {plan.features.map((feature) => (
+                              <span
+                                key={feature}
+                                className="px-2.5 py-1 rounded border border-line/40 text-[10.5px] text-muted bg-panel/30"
+                              >
+                                {feature}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="mt-auto pt-6 border-t border-line/40">
+                        <Link
+                          href="/login/"
+                          className={`block w-full text-center py-3.5 rounded-xl font-bold tracking-wider uppercase text-[11px] sm:text-sm transition-all duration-200 ${
+                            isFree
+                              ? "bg-neon text-ink hover:bg-neon/90"
+                              : isPopular
+                              ? "bg-gradient-to-r from-neon to-cyan-600 text-white hover:from-neon/90 hover:to-cyan-500"
+                              : "bg-panel border border-line text-text hover:bg-panel/80 hover:border-neon/40"
+                          }`}
+                        >
+                          {isFree
+                            ? "abrir terminal"
+                            : isPopular
+                            ? `assinar ${plan.name}`
+                            : `solicitar ${plan.name}`}
+                        </Link>
+                      </div>
+                    </div>
+
+                    {isPopular && (
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-neon text-ink text-[10px] font-bold tracking-wider uppercase shadow-[0_0_15px_rgba(0,255,255,0.4)]">
+                        recomendado
+                      </div>
+                    )}
+                    {isMax && (
+                      <div className="absolute -top-3 right-3 px-3 py-1 rounded-full bg-amber text-ink text-[10px] font-bold tracking-wider uppercase shadow-[0_0_15px_rgba(255,193,7,0.4)]">
+                        acesso total
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <p className="mt-10 text-center text-[11px] text-muted">
+              Precos informativos: a troca de plano e feita pelo administrador em
+              <span className="text-neon font-medium"> Admin > Usuarios</span>.
+              Nao ha cobranca automatica nesta versao.
+            </p>
           </div>
-          <p className="text-muted mt-4 text-[12px]">
-            Precos informativos: a troca de plano e feita pelo administrador em
-            <span className="text-neon">{" Admin > Usuarios"}</span>. Nao ha
-            cobranca automatica nesta versao.
-          </p>
         </section>
 
         <section className="py-10 sm:py-14">
