@@ -29,6 +29,7 @@ const NAV_GROUPS: { title: string; items: { href: string; label: string }[] }[] 
     title: "sistema",
     items: [
       { href: "/admin/omega/", label: "omega" },
+      { href: "/admin/support/", label: "suporte" },
       { href: "/admin/audit/", label: "auditoria" },
       { href: "/admin/maintenance/", label: "manutencao" },
     ],

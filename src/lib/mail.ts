@@ -66,6 +66,28 @@ export type DeletedMailParams = {
   appHost: string;
 };
 
+export type SupportPlanRecord = {
+  kind: "pagamento" | "upgrade";
+  id: string;
+  userEmail: string;
+  planName: string;
+  currentPlanName?: string | null;
+  amount: number | null;
+  status: string;
+  pixKey: string | null;
+  activationCode: string | null;
+  createdAt: string;
+  paidAt?: string | null;
+};
+
+export type SupportPlanMailParams = {
+  to: string;
+  message: string;
+  adminEmail: string;
+  records: SupportPlanRecord[];
+  appHost: string;
+};
+
 function escapeHtml(value: string) {
   const amp = String.fromCharCode(38);
   return value
@@ -397,4 +419,68 @@ export async function sendDeletedMail(params: DeletedMailParams) {
     console.error("[NEXUS] falha ao enviar e-mail de exclusao:", error);
     return false;
   }
+}
+
+export async function sendSupportPlanMail(params: SupportPlanMailParams) {
+  const transporter = await buildTransporter();
+  if (!transporter) throw new Error("SMTP nao configurado.");
+
+  const rows = params.records
+    .map((r) => {
+      const statusLabel =
+        r.status === "paid" ? "pago" : r.status === "pending" ? "pendente" : r.status;
+      return `
+      <tr>
+        <td style="padding:6px 10px;border-bottom:1px solid #1e2a33;color:#9fb1bd;">${escapeHtml(r.kind)}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #1e2a33;color:#9fb1bd;font-family:monospace;">${escapeHtml(r.id)}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #1e2a33;color:#eaeaea;">${escapeHtml(r.userEmail)}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #1e2a33;color:#eaeaea;">${escapeHtml(r.planName)}${r.currentPlanName ? ` <span style="color:#666;">(de ${escapeHtml(r.currentPlanName)})</span>` : ""}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #1e2a33;color:#00ff9c;">${r.amount != null ? `R$ ${r.amount.toFixed(2)}` : "-"}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #1e2a33;color:#9fb1bd;">${escapeHtml(statusLabel)}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #1e2a33;color:#9fb1bd;font-family:monospace;">${escapeHtml(r.pixKey ?? "-")}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #1e2a33;color:#9fb1bd;font-family:monospace;">${escapeHtml(r.activationCode ?? "-")}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #1e2a33;color:#9fb1bd;font-family:monospace;">${escapeHtml(r.createdAt)}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #1e2a33;color:#9fb1bd;font-family:monospace;">${escapeHtml(r.paidAt ?? "-")}</td>
+      </tr>`;
+    })
+    .join("");
+
+  const content = `
+  <p style="margin:0;font-size:12px;letter-spacing:0.14em;color:#00ff9c;text-transform:uppercase;">[ suporte ] — dados de plano comprado</p>
+  <p style="margin:18px 0 0;font-size:13.5px;line-height:1.75;color:#d7e3ea;">
+    Enviado por <strong style="color:#00ff9c;">${escapeHtml(params.adminEmail)}</strong> · ${params.records.length} registro(s) · ${escapeHtml(params.appHost)}
+  </p>
+  ${params.message ? `<p style="margin:16px 0 0;font-size:13.5px;line-height:1.8;color:#eaeaea;white-space:pre-wrap;border-left:2px solid #00ff9c;padding-left:12px;">${escapeHtml(params.message)}</p>` : ""}
+  <div style="margin:20px 0 0;overflow-x:auto;">
+    <table style="border-collapse:collapse;width:100%;font-size:12.5px;">
+      <thead>
+        <tr>
+          <th style="padding:8px 10px;border-bottom:1px solid #2a3a45;color:#00ff9c;text-align:left;">tipo</th>
+          <th style="padding:8px 10px;border-bottom:1px solid #2a3a45;color:#00ff9c;text-align:left;">id</th>
+          <th style="padding:8px 10px;border-bottom:1px solid #2a3a45;color:#00ff9c;text-align:left;">usuario</th>
+          <th style="padding:8px 10px;border-bottom:1px solid #2a3a45;color:#00ff9c;text-align:left;">plano</th>
+          <th style="padding:8px 10px;border-bottom:1px solid #2a3a45;color:#00ff9c;text-align:left;">valor</th>
+          <th style="padding:8px 10px;border-bottom:1px solid #2a3a45;color:#00ff9c;text-align:left;">status</th>
+          <th style="padding:8px 10px;border-bottom:1px solid #2a3a45;color:#00ff9c;text-align:left;">pix</th>
+          <th style="padding:8px 10px;border-bottom:1px solid #2a3a45;color:#00ff9c;text-align:left;">codigo</th>
+          <th style="padding:8px 10px;border-bottom:1px solid #2a3a45;color:#00ff9c;text-align:left;">criado</th>
+          <th style="padding:8px 10px;border-bottom:1px solid #2a3a45;color:#00ff9c;text-align:left;">pago</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>
+  `;
+
+  await transporter.sendMail({
+    from: (await getOtpMailSettings())?.from,
+    to: params.to,
+    subject: `[HACKER AI] Suporte · ${params.records.length} plano(s) comprado(s)`,
+    html: mailWrapper("Suporte — dados de plano comprado", content),
+    text: `HACKER AI :: Suporte\n\n${params.records.length} registro(s) de plano(s) comprado(s).\n\n${params.message || ""}\n\n${params.records
+      .map((r) => `${r.kind} ${r.id} ${r.userEmail} ${r.planName} ${r.amount ?? "-"} ${r.status}`)
+      .join("\n")}`,
+  });
+
+  return true;
 }

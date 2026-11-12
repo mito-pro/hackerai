@@ -5,6 +5,7 @@ import { maintenanceBlock } from "@/lib/maintenance";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { planForUser, rateLimitFor, syncCounters } from "@/lib/usage";
 import { getProviderKeys } from "@/lib/settings";
+import { findModel } from "@/lib/model-registry";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -19,6 +20,9 @@ type VideoBody = {
 };
 
 const RUNPI_BASE = "https://runapi.ai/v1";
+const POLLINATIONS_VIDEO_BASE = "https://gen.pollinations.ai/video";
+const DEFAULT_MODEL = "pollinations/default";
+const MAX_VIDEO_BYTES = 3_000_000;
 
 async function pollRunpiTask(
   apiKey: string,
@@ -54,6 +58,109 @@ async function pollRunpiTask(
   throw new Error("RunAPI task timeout");
 }
 
+async function generateRunapi(options: {
+  apiKey: string;
+  modelId: string;
+  prompt: string;
+  duration?: number;
+  aspectRatio?: string;
+  imageUrl?: string;
+  enableSound?: boolean;
+}): Promise<string> {
+  const taskType = options.imageUrl ? "image_to_video" : "text_to_video";
+  const startResponse = await fetch(
+    `${RUNPI_BASE}/${options.modelId}/${taskType}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${options.apiKey}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        prompt: options.prompt,
+        duration: options.duration ?? 5,
+        aspect_ratio: options.aspectRatio ?? "16:9",
+        ...(options.imageUrl ? { image_url: options.imageUrl } : {}),
+        ...(options.enableSound !== undefined
+          ? { enable_sound: options.enableSound }
+          : {}),
+      }),
+      signal: AbortSignal.timeout(60_000),
+    }
+  );
+
+  if (!startResponse.ok) {
+    const errorText = await startResponse.text();
+    throw new Error(`RunAPI HTTP ${startResponse.status}: ${errorText.slice(0, 300)}`);
+  }
+
+  const startPayload = await startResponse.json();
+  const taskUrl =
+    startPayload?.task_url ??
+    startPayload?.url ??
+    `${RUNPI_BASE}/tasks/${startPayload?.task_id ?? ""}`;
+
+  return pollRunpiTask(options.apiKey, taskUrl);
+}
+
+async function generatePollinations(options: {
+  prompt: string;
+  model: string;
+  seed?: number;
+}): Promise<string> {
+  const params = new URLSearchParams({ referrer: "hackerai-nexus" });
+  if (options.model) params.set("model", options.model);
+  if (Number.isFinite(options.seed)) params.set("seed", String(options.seed));
+
+  const url = `${POLLINATIONS_VIDEO_BASE}/${encodeURIComponent(options.prompt)}?${params.toString()}`;
+
+  let lastError = "";
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(240_000),
+      headers: { Accept: "video/mp4, video/*" },
+    });
+
+    const contentType = (response.headers.get("content-type") || "").toLowerCase();
+
+    if (response.ok && contentType.startsWith("video")) {
+      const buffer = Buffer.from(await response.arrayBuffer());
+      if (!buffer.byteLength) throw new Error("Pollinations retornou video vazio.");
+      if (buffer.byteLength > MAX_VIDEO_BYTES) {
+        throw new Error(
+          `Video muito grande (${Math.round(buffer.byteLength / 1e6)}MB). Tente outro modelo.`
+        );
+      }
+      return `data:video/mp4;base64,${buffer.toString("base64")}`;
+    }
+
+    const errorText = contentType.includes("json")
+      ? await response.text()
+      : `HTTP ${response.status}`;
+    lastError = errorText.slice(0, 300);
+
+    const limited =
+      response.status === 401 ||
+      response.status === 402 ||
+      response.status === 429;
+    if (!limited || attempt === 2) break;
+
+    const waitMatch = errorText.match(/Retry after (\d+)s/i);
+    const waitSeconds = waitMatch ? Number(waitMatch[1]) + 2 : 20;
+    await new Promise((resolve) =>
+      setTimeout(resolve, Math.min(Math.max(waitSeconds, 10), 70) * 1000)
+    );
+  }
+
+  throw new Error(`Pollinations: ${lastError || "sem resposta"}`);
+}
+
+function providerOf(modelId: string): "pollinations" | "runapi" {
+  if (modelId.startsWith("runapi/")) return "runapi";
+  return "pollinations";
+}
+
 export const POST = apiHandler(async (request: Request) => {
   let body: VideoBody;
   try {
@@ -61,6 +168,14 @@ export const POST = apiHandler(async (request: Request) => {
   } catch {
     return NextResponse.json(
       { error: "bad_request", message: "Payload invalido." },
+      { status: 400 }
+    );
+  }
+
+  const prompt = (body.prompt || "").trim();
+  if (!prompt) {
+    return NextResponse.json(
+      { error: "bad_request", message: "Prompt vazio." },
       { status: 400 }
     );
   }
@@ -89,66 +204,80 @@ export const POST = apiHandler(async (request: Request) => {
   }
 
   const keys = await getProviderKeys();
-  if (!keys.runapi) {
-    return NextResponse.json(
-      { error: "provider_missing", message: "RunAPI chave nao configurada." },
-      { status: 400 }
-    );
-  }
+  const modelId = body.model?.trim() || DEFAULT_MODEL;
+  const provider = providerOf(modelId);
+  const def = findModel(modelId);
+  const runapiModel =
+    def && def.provider === "runapi" && def.modelId
+      ? def.modelId
+      : modelId.replace("runapi/", "");
+  const pollinationsModel =
+    def && def.provider === "pollinations" ? def.modelId || "" : "";
 
-  const modelId = body.model ?? "kling-v2.1-standard";
-  const taskType = body.image_url ? "image_to_video" : "text_to_video";
+  const attempts: Array<{ name: string; run: () => Promise<string> }> = [];
 
-  try {
-    const startResponse = await fetch(
-      `${RUNPI_BASE}/${modelId}/${taskType}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${keys.runapi}`,
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify({
-          prompt: body.prompt,
-          duration: body.duration ?? 5,
-          aspect_ratio: body.aspect_ratio ?? "16:9",
-          ...(body.image_url ? { image_url: body.image_url } : {}),
-          ...(body.enable_sound !== undefined ? { enable_sound: body.enable_sound } : {}),
+  if (provider === "runapi" && keys.runapi) {
+    attempts.push({
+      name: "runapi",
+      run: () =>
+        generateRunapi({
+          apiKey: keys.runapi,
+          modelId: runapiModel,
+          prompt,
+          duration: body.duration,
+          aspectRatio: body.aspect_ratio,
+          imageUrl: body.image_url,
+          enableSound: body.enable_sound,
         }),
-      }
-    );
-
-    if (!startResponse.ok) {
-      const errorText = await startResponse.text();
-      return NextResponse.json(
-        {
-          error: "generation_failed",
-          message: `RunAPI HTTP ${startResponse.status}: ${errorText}`,
-        },
-        { status: 500 }
-      );
-    }
-
-    const startPayload = await startResponse.json();
-    const taskUrl =
-      startPayload?.task_url ??
-      startPayload?.url ??
-      `${RUNPI_BASE}/tasks/${startPayload?.task_id ?? ""}`;
-
-    const videoUrl = await pollRunpiTask(keys.runapi, taskUrl);
-
-    return NextResponse.json({
-      ok: true,
-      video: videoUrl,
-      mime: "video/mp4",
-      model: modelId,
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return NextResponse.json(
-      { error: "generation_failed", message },
-      { status: 500 }
-    );
   }
+
+  attempts.push({
+    name: "pollinations",
+    run: () => generatePollinations({ prompt, model: pollinationsModel }),
+  });
+
+  if (provider !== "runapi" && keys.runapi) {
+    attempts.push({
+      name: "runapi",
+      run: () =>
+        generateRunapi({
+          apiKey: keys.runapi,
+          modelId: "kling-v2.1-standard",
+          prompt,
+          duration: body.duration,
+          aspectRatio: body.aspect_ratio,
+          imageUrl: body.image_url,
+          enableSound: body.enable_sound,
+        }),
+    });
+  }
+
+  const errors: string[] = [];
+  for (const attempt of attempts) {
+    try {
+      const video = await attempt.run();
+      return NextResponse.json({
+        ok: true,
+        video,
+        mime: "video/mp4",
+        model: modelId,
+        provider: attempt.name,
+        usedFallback: attempt.name !== provider,
+        errors: errors.length ? errors : undefined,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`${attempt.name}: ${message}`);
+    }
+  }
+
+  return NextResponse.json(
+    {
+      error: "generation_failed",
+      message:
+        `Provedores de video indisponiveis agora. ${errors.join(" | ")}`.slice(0, 800),
+    },
+    { status: 502 }
+  );
 });

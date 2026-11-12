@@ -20,9 +20,10 @@ export type AuditAction =
   | "session.revoke"
   | "chat.delete"
   | "omega.setup"
-  | "omega.decensor";
+  | "omega.decensor"
+  | "support.send";
 
-export type AuditTarget = "user" | "plan" | "settings" | "provider" | "session" | "chat" | "omega";
+export type AuditTarget = "user" | "plan" | "settings" | "provider" | "session" | "chat" | "omega" | "support";
 
 export async function logAudit(params: {
   actorId?: string | null;

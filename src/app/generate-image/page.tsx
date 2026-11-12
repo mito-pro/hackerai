@@ -139,7 +139,7 @@ export default function GenerateImagePage() {
               <DecodeText text="[ gerar imagem ]" />
             </h1>
             <p className="text-muted text-[13px]">
-              Crie imagens com IA: FLUX, Z-Image e NVIDIA com fallback automatico.
+              FLUX, Z-Image, MAI e mais com fallback automatico. Limite gratis de 1 imagem a cada 45s por IP.
             </p>
           </div>
           <div className="flex items-center gap-2">

@@ -5,6 +5,7 @@ import { maintenanceBlock } from "@/lib/maintenance";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { planForUser, rateLimitFor, syncCounters } from "@/lib/usage";
 import { getProviderKeys } from "@/lib/settings";
+import { findModel } from "@/lib/model-registry";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -58,16 +59,35 @@ async function generatePollinations(options: {
   if (Number.isFinite(options.seed)) params.set("seed", String(options.seed));
 
   const url = `${POLLINATIONS_IMAGE_BASE}/${encodeURIComponent(options.prompt)}?${params.toString()}`;
-  const response = await fetch(url, {
-    signal: AbortSignal.timeout(180_000),
-    headers: { Accept: "image/*" },
-  });
-  if (!response.ok) {
-    throw new Error(`Pollinations HTTP ${response.status}`);
+
+  // Limite gratuito do Pollinations: 1 imagem a cada 45s por IP.
+  // Espera e tenta de novo antes de desistir do provedor.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(180_000),
+      headers: { Accept: "image/*" },
+    });
+
+    if (response.ok) {
+      const parsed = await bytesToDataUri(response);
+      if (!parsed) throw new Error("Pollinations nao retornou imagem.");
+      return parsed;
+    }
+
+    const errorText = await response.text();
+    const limited = response.status === 402 || response.status === 429;
+    if (!limited || attempt === 2) {
+      throw new Error(`Pollinations HTTP ${response.status}: ${errorText.slice(0, 200)}`);
+    }
+
+    const waitMatch = errorText.match(/Retry after (\d+)s/i);
+    const waitSeconds = waitMatch ? Number(waitMatch[1]) + 2 : 45;
+    await new Promise((resolve) =>
+      setTimeout(resolve, Math.min(Math.max(waitSeconds, 5), 70) * 1000)
+    );
   }
-  const parsed = await bytesToDataUri(response);
-  if (!parsed) throw new Error("Pollinations nao retornou imagem.");
-  return parsed;
+
+  throw new Error("Pollinations: limite gratuito atingido.");
 }
 
 async function generateNvidia(options: {
@@ -228,7 +248,11 @@ export const POST = apiHandler(async (request: Request) => {
   const keys = await getProviderKeys();
   const modelId = body.model?.trim() || DEFAULT_MODEL;
   const provider = providerOf(modelId);
-  const payloadModel = modelPayload(modelId);
+  const registryDef = findModel(modelId);
+  const payloadModel =
+    registryDef && registryDef.provider === provider && registryDef.modelId
+      ? registryDef.modelId
+      : modelPayload(modelId);
   const width = clampSize(body.width, 1024);
   const height = clampSize(body.height, 1024);
 
