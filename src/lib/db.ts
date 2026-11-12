@@ -22,7 +22,8 @@ const SCHEMA_STATEMENTS: string[] = [
     day_start TEXT NOT NULL,
     token_override INTEGER,
     created_at TEXT NOT NULL,
-    last_login_at TEXT
+    last_login_at TEXT,
+    expires_at TEXT
   )`,
   `CREATE TABLE IF NOT EXISTS otp_codes (
     id TEXT PRIMARY KEY,
@@ -114,6 +115,41 @@ const SCHEMA_STATEMENTS: string[] = [
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS payments (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    user_email TEXT NOT NULL,
+    plan_id TEXT NOT NULL,
+    plan_name TEXT NOT NULL,
+    amount REAL NOT NULL,
+    pix_key TEXT NOT NULL,
+    pix_qr_code TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    activation_code TEXT,
+    code_sent INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    paid_at TEXT,
+    expires_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS upgrade_requests (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    user_email TEXT NOT NULL,
+    current_plan_id TEXT NOT NULL,
+    requested_plan_id TEXT NOT NULL,
+    requested_plan_name TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    activation_code TEXT,
+    pix_key TEXT,
+    admin_notes TEXT,
+    resolved_at TEXT,
+    resolved_by TEXT,
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_payments_user ON payments(user_id, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status)`,
+  `CREATE INDEX IF NOT EXISTS idx_upgrade_requests_user ON upgrade_requests(user_id, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_upgrade_requests_status ON upgrade_requests(status)`,
   `CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(chat_id)`,
   `CREATE INDEX IF NOT EXISTS idx_usage_user ON usage_logs(user_id, created_at)`,
   `CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token_hash)`,
@@ -193,6 +229,7 @@ function openDatabase(file: string) {
   database.exec("PRAGMA busy_timeout = 5000;");
   for (const statement of SCHEMA_STATEMENTS) database.exec(statement);
   migrateSqlite(database);
+  migrateUsersSqlite(database);
   seedPlansSqlite(database);
   migratePlanProvidersSqlite(database);
   migrateOmegaCapabilitiesSqlite(database);
@@ -234,6 +271,19 @@ function migrateSqlite(database: DatabaseSync) {
     database.exec(
       "ALTER TABLE plans ADD COLUMN providers TEXT NOT NULL DEFAULT '[]'"
     );
+  }
+}
+
+function migrateUsersSqlite(database: DatabaseSync) {
+  const columns = database
+    .prepare("PRAGMA table_info(users)")
+    .all() as Array<{ name: string }>;
+  const names = new Set(columns.map((column) => column.name));
+  if (!names.has("expires_at")) {
+    database.exec("ALTER TABLE users ADD COLUMN expires_at TEXT");
+  }
+  if (!names.has("token_override")) {
+    database.exec("ALTER TABLE users ADD COLUMN token_override INTEGER");
   }
 }
 

@@ -382,7 +382,7 @@ export const POST = apiHandler(async (request: Request) => {
     if (provider === "runapi") {
       if (!keys.runapi) throw new Error("Chave nao configurada");
       const response = await fetch(
-        "https://runapi.ai/api/v1/models",
+        "https://runapi.ai/v1/models",
         {
           headers: { Authorization: `Bearer ${keys.runapi}` },
         }

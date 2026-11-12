@@ -18,7 +18,7 @@ type VideoBody = {
   enable_sound?: boolean;
 };
 
-const RUNPI_BASE = "https://runapi.ai/api/v1";
+const RUNPI_BASE = "https://runapi.ai/v1";
 
 async function pollRunpiTask(
   apiKey: string,

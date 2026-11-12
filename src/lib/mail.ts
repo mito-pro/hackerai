@@ -27,6 +27,45 @@ export type AccountCreatedMailParams = {
   appHost: string;
 };
 
+export type PaymentConfirmationMailParams = {
+  email: string;
+  name: string;
+  planName: string;
+  amount: number;
+  pixKey: string;
+  activationCode: string;
+  appHost: string;
+};
+
+export type UpgradeApprovalMailParams = {
+  email: string;
+  name: string;
+  currentPlan: string;
+  newPlan: string;
+  activationCode: string;
+  pixKey: string | null;
+  appHost: string;
+};
+
+export type WarningMailParams = {
+  email: string;
+  name: string;
+  reason: string;
+  appHost: string;
+};
+
+export type BanMailParams = {
+  email: string;
+  name: string;
+  appHost: string;
+};
+
+export type DeletedMailParams = {
+  email: string;
+  name: string;
+  appHost: string;
+};
+
 function escapeHtml(value: string) {
   const amp = String.fromCharCode(38);
   return value
@@ -193,6 +232,169 @@ Faca login com seu e-mail para receber o codigo OTP de acesso.
     return true;
   } catch (error) {
     console.error("[NEXUS] falha ao enviar e-mail de conta criada:", error);
+    return false;
+  }
+}
+
+export async function sendPaymentConfirmationMail(params: PaymentConfirmationMailParams) {
+  const transporter = (await buildTransporter());
+  if (!transporter) return false;
+
+  const content = `
+  <p style="margin:0;font-size:12px;letter-spacing:0.14em;color:#00ff9c;text-transform:uppercase;">[ system message ] — pagamento confirmado</p>
+  <p style="margin:18px 0 0;font-size:14px;line-height:1.7;color:#d7e3ea;">Ola, ${escapeHtml(params.name)}.</p>
+  <p style="margin:10px 0 0;font-size:13.5px;line-height:1.75;color:#9fb1bd;">
+  Seu pagamento para o plano <span style="color:#00ff9c;">${escapeHtml(params.planName)}</span> (R$ ${params.amount.toFixed(2)}) foi confirmado.
+  </p>
+  <table style="width:100%;border-collapse:collapse;margin:18px 0;">
+  <tr><td style="padding:8px 0;border-bottom:1px solid #17262f;color:#7d8f9b;font-size:12px;">chave pix</td><td style="padding:8px 0;border-bottom:1px solid #17262f;color:#d7e3ea;font-size:12px;text-align:right;">${escapeHtml(params.pixKey)}</td></tr>
+  <tr><td style="padding:8px 0;border-bottom:1px solid #17262f;color:#7d8f9b;font-size:12px;">codigo de ativacao</td><td style="padding:8px 0;border-bottom:1px solid #17262f;color:#00ff9c;font-size:14px;letter-spacing:4px;text-align:right;font-weight:bold;">${escapeHtml(params.activationCode)}</td></tr>
+  </table>
+  <p style="margin:18px 0 0;font-size:13px;line-height:1.75;color:#9fb1bd;">
+  Use o codigo de ativacao em <span style="color:#00ff9c;">${escapeHtml(params.appHost)}/ativar-plano</span>. O codigo expira em 30 minutos.
+  </p>
+  `;
+
+  try {
+    await transporter.sendMail({
+      from: (await getOtpMailSettings())?.from,
+      to: params.email,
+      subject: `[HACKER AI] Pagamento confirmado :: ${params.planName}`,
+      html: mailWrapper("Pagamento confirmado", content),
+      text: `HACKER AI :: Pagamento confirmado\n\nOla ${params.name},\n\nSeu pagamento para o plano ${params.planName} (R$ ${params.amount.toFixed(2)}) foi confirmado.\n\nChave PIX: ${params.pixKey}\nCodigo de ativacao: ${params.activationCode}\n\nUse o codigo em ${params.appHost}/ativar-plano.`,
+    });
+    return true;
+  } catch (error) {
+    console.error("[NEXUS] falha ao enviar e-mail de pagamento:", error);
+    return false;
+  }
+}
+
+export async function sendUpgradeApprovalMail(params: UpgradeApprovalMailParams) {
+  const transporter = (await buildTransporter());
+  if (!transporter) return false;
+
+  const content = `
+  <p style="margin:0;font-size:12px;letter-spacing:0.14em;color:#ffb347;text-transform:uppercase;">[ system message ] — upgrade aprovado</p>
+  <p style="margin:18px 0 0;font-size:14px;line-height:1.7;color:#d7e3ea;">Ola, ${escapeHtml(params.name)}.</p>
+  <p style="margin:10px 0 0;font-size:13.5px;line-height:1.75;color:#9fb1bd;">
+  Sua solicitacao de upgrade de <span style="color:#9fb1bd;">${escapeHtml(params.currentPlan)}</span> para <span style="color:#00ff9c;">${escapeHtml(params.newPlan)}</span> foi aprovada pelo administrador.
+  </p>
+  <table style="width:100%;border-collapse:collapse;margin:18px 0;">
+  <tr><td style="padding:8px 0;border-bottom:1px solid #17262f;color:#7d8f9b;font-size:12px;">plano atual</td><td style="padding:8px 0;border-bottom:1px solid #17262f;color:#9fb1bd;font-size:12px;text-align:right;">${escapeHtml(params.currentPlan)}</td></tr>
+  <tr><td style="padding:8px 0;border-bottom:1px solid #17262f;color:#7d8f9b;font-size:12px;">novo plano</td><td style="padding:8px 0;border-bottom:1px solid #17262f;color:#00ff9c;font-size:12px;text-align:right;">${escapeHtml(params.newPlan)}</td></tr>
+  <tr><td style="padding:8px 0;border-bottom:1px solid #17262f;color:#7d8f9b;font-size:12px;">codigo de ativacao</td><td style="padding:8px 0;border-bottom:1px solid #17262f;color:#00ff9c;font-size:14px;letter-spacing:4px;text-align:right;font-weight:bold;">${escapeHtml(params.activationCode)}</td></tr>
+  ${params.pixKey ? `<tr><td style="padding:8px 0;color:#7d8f9b;font-size:12px;">chave pix</td><td style="padding:8px 0;color:#d7e3ea;font-size:12px;text-align:right;">${escapeHtml(params.pixKey)}</td></tr>` : ""}
+  </table>
+  <p style="margin:18px 0 0;font-size:13px;line-height:1.75;color:#9fb1bd;">
+  Use o codigo de ativacao em <span style="color:#00ff9c;">${escapeHtml(params.appHost)}/ativar-plano</span>. O codigo expira em 30 minutos.
+  </p>
+  `;
+
+  try {
+    await transporter.sendMail({
+      from: (await getOtpMailSettings())?.from,
+      to: params.email,
+      subject: `[HACKER AI] Upgrade aprovado :: ${params.newPlan}`,
+      html: mailWrapper("Upgrade aprovado", content),
+      text: `HACKER AI :: Upgrade aprovado\n\nOla ${params.name},\n\nSeu upgrade de ${params.currentPlan} para ${params.newPlan} foi aprovado.\n\nCodigo de ativacao: ${params.activationCode}\n${params.pixKey ? `Chave PIX: ${params.pixKey}\n` : ""}\n\nUse o codigo em ${params.appHost}/ativar-plano.`,
+    });
+    return true;
+  } catch (error) {
+    console.error("[NEXUS] falha ao enviar e-mail de upgrade:", error);
+    return false;
+  }
+}
+
+export async function sendWarningMail(params: WarningMailParams) {
+  const transporter = (await buildTransporter());
+  if (!transporter) return false;
+
+  const content = `
+  <p style="margin:0;font-size:12px;letter-spacing:0.14em;color:#ff4444;text-transform:uppercase;">[ system message ] — aviso de uso indevido</p>
+  <p style="margin:18px 0 0;font-size:14px;line-height:1.7;color:#d7e3ea;">Ola, ${escapeHtml(params.name)}.</p>
+  <p style="margin:10px 0 0;font-size:13.5px;line-height:1.75;color:#9fb1bd;">
+  O administrador detectou <span style="color:#ff4444;">uso indevido</span> em sua conta no <span style="color:#00ff9c;">${escapeHtml(params.appHost)}</span>.
+  </p>
+  <table style="width:100%;border-collapse:collapse;margin:18px 0;">
+  <tr><td style="padding:8px 0;border-bottom:1px solid #17262f;color:#7d8f9b;font-size:12px;">motivo</td><td style="padding:8px 0;border-bottom:1px solid #17262f;color:#d7e3ea;font-size:12px;text-align:right;">${escapeHtml(params.reason)}</td></tr>
+  </table>
+  <p style="margin:18px 0 0;font-size:13px;line-height:1.75;color:#ff4444;">
+  Este e um aviso formal. Reincidencia podera resultar em suspensao ou banimento da conta.
+  </p>
+  `;
+
+  try {
+    await transporter.sendMail({
+      from: (await getOtpMailSettings())?.from,
+      to: params.email,
+      subject: `[HACKER AI] Aviso de uso indevido :: ${params.appHost}`,
+      html: mailWrapper("Aviso de uso indevido", content),
+      text: `HACKER AI :: Aviso de uso indevido\n\nOla ${params.name},\n\nO administrador detectou uso indevido em sua conta.\n\nMotivo: ${params.reason}\n\nEste e um aviso formal. Reincidencia podera resultar em suspensao ou banimento da conta.`,
+    });
+    return true;
+  } catch (error) {
+    console.error("[NEXUS] falha ao enviar e-mail de aviso:", error);
+    return false;
+  }
+}
+
+export async function sendBanMail(params: BanMailParams) {
+  const transporter = (await buildTransporter());
+  if (!transporter) return false;
+
+  const content = `
+  <p style="margin:0;font-size:12px;letter-spacing:0.14em;color:#ff4444;text-transform:uppercase;">[ system message ] — conta banida</p>
+  <p style="margin:18px 0 0;font-size:14px;line-height:1.7;color:#d7e3ea;">Ola, ${escapeHtml(params.name)}.</p>
+  <p style="margin:10px 0 0;font-size:13.5px;line-height:1.75;color:#9fb1bd;">
+  Sua conta no <span style="color:#00ff9c;">${escapeHtml(params.appHost)}</span> foi <span style="color:#ff4444;">banida</span> pelo administrador.
+  </p>
+  <p style="margin:18px 0 0;font-size:13px;line-height:1.75;color:#9fb1bd;">
+  Voce nao podera mais acessar o sistema. Entre em contato com o administrador para mais informacoes.
+  </p>
+  `;
+
+  try {
+    await transporter.sendMail({
+      from: (await getOtpMailSettings())?.from,
+      to: params.email,
+      subject: `[HACKER AI] Conta banida :: ${params.appHost}`,
+      html: mailWrapper("Conta banida", content),
+      text: `HACKER AI :: Conta banida\n\nOla ${params.name},\n\nSua conta foi banida pelo administrador.\n\nVoce nao podera mais acessar o sistema.`,
+    });
+    return true;
+  } catch (error) {
+    console.error("[NEXUS] falha ao enviar e-mail de banimento:", error);
+    return false;
+  }
+}
+
+export async function sendDeletedMail(params: DeletedMailParams) {
+  const transporter = (await buildTransporter());
+  if (!transporter) return false;
+
+  const content = `
+  <p style="margin:0;font-size:12px;letter-spacing:0.14em;color:#ff4444;text-transform:uppercase;">[ system message ] — conta apagada</p>
+  <p style="margin:18px 0 0;font-size:14px;line-height:1.7;color:#d7e3ea;">Ola, ${escapeHtml(params.name)}.</p>
+  <p style="margin:10px 0 0;font-size:13.5px;line-height:1.75;color:#9fb1bd;">
+  Sua conta no <span style="color:#00ff9c;">${escapeHtml(params.appHost)}</span> foi <span style="color:#ff4444;">apagada</span> pelo administrador.
+  </p>
+  <p style="margin:18px 0 0;font-size:13px;line-height:1.75;color:#9fb1bd;">
+  Todos os seus dados (chats, mensagens, uso e sessoes) foram removidos permanentemente.
+  </p>
+  `;
+
+  try {
+    await transporter.sendMail({
+      from: (await getOtpMailSettings())?.from,
+      to: params.email,
+      subject: `[HACKER AI] Conta apagada :: ${params.appHost}`,
+      html: mailWrapper("Conta apagada", content),
+      text: `HACKER AI :: Conta apagada\n\nOla ${params.name},\n\nSua conta foi apagada pelo administrador.\n\nTodos os seus dados foram removidos permanentemente.`,
+    });
+    return true;
+  } catch (error) {
+    console.error("[NEXUS] falha ao enviar e-mail de exclusao:", error);
     return false;
   }
 }
