@@ -363,6 +363,52 @@ export function ChatShell({
               {user.name} :: {user.role}
             </p>
           </div>
+
+          <div className="panel-flat mt-5 p-3">
+            <p className="text-muted text-[11px] tracking-[0.16em] uppercase">
+              gerar mídia
+            </p>
+            <div className="mt-2 flex flex-col gap-2">
+              <Link
+                href="/generate-image/"
+                className="btn btn-xs text-left"
+              >
+                gerar imagem
+              </Link>
+              <Link
+                href="/generate-audio/"
+                className="btn btn-xs text-left"
+              >
+                gerar audio
+              </Link>
+              <Link
+                href="/generate-video/"
+                className="btn btn-xs text-left"
+              >
+                gerar video
+              </Link>
+            </div>
+          </div>
+
+          <div className="panel-flat mt-5 p-3">
+            <p className="text-muted text-[11px] tracking-[0.16em] uppercase">
+              conta
+            </p>
+            <div className="mt-2 flex flex-col gap-2">
+              <Link
+                href="/plano-mudanca/"
+                className="btn btn-xs text-left"
+              >
+                mudar de plano
+              </Link>
+              <Link
+                href="/checkout/"
+                className="btn btn-xs text-left btn-neon"
+              >
+                comprar plano PIX
+              </Link>
+            </div>
+          </div>
         </aside>
 
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
