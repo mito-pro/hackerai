@@ -79,12 +79,12 @@ const planSchema = z.object({
   name: z.string().min(1).max(40),
   category: z.string().max(40).default(""),
   description: z.string().max(240).default(""),
-  price: z.number().min(0),
-  monthlyTokens: z.number().int().min(0),
-  dailyMessages: z.number().int().min(0),
-  maxContext: z.number().int().min(1000),
+  price: z.preprocess((val) => (val === "" || val === undefined ? 0 : Number(val)), z.number().min(0)),
+  monthlyTokens: z.preprocess((val) => (val === "" || val === undefined ? 0 : Number(val)), z.number().int().min(0)),
+  dailyMessages: z.preprocess((val) => (val === "" || val === undefined ? 0 : Number(val)), z.number().int().min(0)),
+  maxContext: z.preprocess((val) => (val === "" || val === undefined ? 8000 : Number(val)), z.number().int().min(100)),
   features: z.array(z.string().max(80)).max(40).default([]),
-  historyDays: z.number().int().min(0).max(365).default(7),
+  historyDays: z.preprocess((val) => (val === "" || val === undefined ? 7 : Number(val)), z.number().int().min(0).max(365).default(7)),
   capabilities: z
     .array(
       z.enum(PLAN_CAPABILITY_KEYS as [PlanCapability, ...PlanCapability[]])
@@ -92,10 +92,10 @@ const planSchema = z.object({
     .max(PLAN_CAPABILITY_KEYS.length)
     .default([]),
   providers: z
-    .array(z.enum(PROVIDER_IDS as [ProviderId, ...ProviderId[]]))
+    .array(z.string())
     .max(PROVIDER_IDS.length)
     .default([]),
-  priority: z.number().int().min(0).max(999).default(10),
+  priority: z.preprocess((val) => (val === "" || val === undefined ? 10 : Number(val)), z.number().int().min(0).max(999).default(10)),
   isDefault: z.boolean().default(false),
 });
 
