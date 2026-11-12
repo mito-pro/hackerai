@@ -167,6 +167,11 @@ export default function Home() {
               <Link href={user ? "/chat/" : "/login/"} className="btn btn-primary">
                 {user ? "Abrir terminal" : "Entrar com OTP"}
               </Link>
+              {user ? (
+                <Link href="/checkout/" className="btn btn-neon">
+                  comprar plano
+                </Link>
+              ) : null}
               <a href="#planos" className="btn">
                 Ver planos
               </a>

@@ -28,6 +28,7 @@ type Settings = {
     hasPassword: boolean;
     appHost: string;
   };
+  pixKey: string;
 };
 
 export default function AdminProvidersPage() {
@@ -52,6 +53,7 @@ export default function AdminProvidersPage() {
     smtpSecure: false,
     mailFrom: "",
     appHost: "",
+    pixKey: "",
   });
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -77,6 +79,7 @@ export default function AdminProvidersPage() {
           smtpSecure: data.otp.smtpSecure,
           mailFrom: data.otp.smtpFrom,
           appHost: data.otp.appHost,
+          pixKey: data.pixKey ?? "",
         }));
       })
       .catch(() => setError("Falha ao carregar as configuracoes."));
@@ -618,6 +621,29 @@ export default function AdminProvidersPage() {
           {tests.smtp ? (
             <p className="text-muted text-[12px]">{tests.smtp}</p>
           ) : null}
+        </section>
+
+        <section className="panel space-y-3 p-5 lg:col-span-2">
+          <h2 className="text-neon text-sm tracking-[0.18em] uppercase">
+            pix :: chave de pagamento
+          </h2>
+          <p className="text-muted text-[12px]">
+            Chave PIX usada pelos usuários para gerar boletos de pagamento de
+            planos. Enviada por e-mail após a confirmação do pagamento.
+          </p>
+          <div>
+            <label className="label">chave PIX</label>
+            <input
+              className="input"
+              value={form.pixKey}
+              placeholder="ex: empresa@dominio.com ou CNPJ"
+              onChange={(event) => setForm({ ...form, pixKey: event.target.value })}
+            />
+          </div>
+          <p className="text-muted text-[11px]">
+            essa chave e exibida na tela de checkout para o usuario copiar e
+            pagar via PIX.
+          </p>
         </section>
 
         <div className="lg:col-span-2">

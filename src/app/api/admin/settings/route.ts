@@ -10,6 +10,7 @@ import {
   setProviderKey,
   setProviderSetting,
   setSetting,
+  getSetting,
   writeSecretSetting,
 } from "@/lib/settings";
 import { sendTestOtpEmail } from "@/lib/otp";
@@ -61,6 +62,7 @@ export const GET = apiHandler(async () => {
       appHost: await getAppHost(),
     },
     maintenance: await getMaintenance(),
+    pixKey: await getSetting("pix:key") ?? "",
   });
 });
 
@@ -86,6 +88,7 @@ const payloadSchema = z.object({
     opencode: z.string().optional(),
     vercel: z.string().optional(),
     runapi: z.string().optional(),
+    pixKey: z.string().optional(),
   clearProvider: z
     .enum([
       "groq",
@@ -143,6 +146,8 @@ export const PUT = apiHandler(async (request: Request) => {
     await setProviderKey("vercel", data.vercel.trim());
   if (data.runapi?.trim())
     await setProviderKey("runapi", data.runapi.trim());
+  if (data.pixKey !== undefined)
+    await setSetting("pix:key", data.pixKey.trim());
   if (data.ollamaBaseUrl !== undefined)
     await setProviderSetting("ollamaBaseUrl", data.ollamaBaseUrl.trim());
   if (data.ollamaModel !== undefined)
