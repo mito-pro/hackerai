@@ -496,7 +496,7 @@ export default function Home() {
 
             <p className="mt-10 text-center text-[11px] text-muted">
               Precos informativos: a troca de plano e feita pelo administrador em
-              <span className="text-neon font-medium"> Admin > Usuarios</span>.
+              <span className="text-neon font-medium"> Admin {'>'} Usuarios</span>.
               Nao ha cobranca automatica nesta versao.
             </p>
           </div>
