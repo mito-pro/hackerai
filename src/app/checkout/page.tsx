@@ -22,15 +22,19 @@ type Plan = {
 
 type PixConfig = { pixKey: string };
 
+const PIX_KEY_DISPLAY = "pb-pagamentos@jim.com";
+
 export default function CheckoutPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [pixConfig, setPixConfig] = useState<PixConfig | null>(null);
   const [selected, setSelected] = useState<Plan | null>(null);
-  const [pixKey, setPixKey] = useState("");
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const pixKey = pixConfig?.pixKey || PIX_KEY_DISPLAY;
 
   useEffect(() => {
     load();
@@ -60,10 +64,15 @@ export default function CheckoutPage() {
     setError("");
   }
 
+  async function copyPix() {
+    await navigator.clipboard.writeText(pixKey);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   async function createPayment() {
     if (!selected) return;
-    const key = pixKey.trim() || pixConfig?.pixKey || "";
-    if (!key) {
+    if (!pixKey) {
       setError("Chave PIX nao configurada. Contate o administrador.");
       return;
     }
@@ -74,7 +83,7 @@ export default function CheckoutPage() {
       const res = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planId: selected.id, pixKey: key }),
+        body: JSON.stringify({ planId: selected.id, pixKey }),
       });
       const data = await readJsonSafe<{ ok?: boolean; payment?: { id: string; status: string }; error?: string; message?: string }>(res);
       if (!res.ok) {
@@ -82,9 +91,8 @@ export default function CheckoutPage() {
         return;
       }
       setMessage(
-        `Pagamento criado para o plano ${selected.name} (R$ ${selected.price.toFixed(2)}). Use a chave PIX: ${key}. Após o pagamento, solicite o codigo de ativacao no painel.`
+        `Pagamento criado para o plano ${selected.name} (R$ ${selected.price.toFixed(2)}). Pague usando a chave PIX acima e aguarde o codigo de ativacao por e-mail.`
       );
-      setPixKey("");
     } catch {
       setError("Falha de rede ao criar pagamento.");
     } finally {
@@ -108,9 +116,8 @@ export default function CheckoutPage() {
             [ escolher plano ]
           </h1>
           <p className="text-muted text-[13px]">
-            Selecione o plano desejado, informe a chave PIX e geramos o
-            pagamento. Após o pagamento, o administrador libera o codigo de
-            ativacao por e-mail (Gmail/SMTP).
+            Selecione o plano, pague via PIX com a chave abaixo e o
+            administrador libera o acesso por e-mail (Gmail/SMTP).
           </p>
         </header>
 
@@ -124,6 +131,31 @@ export default function CheckoutPage() {
             {message}
           </p>
         ) : null}
+
+        {/* Chave PIX em destaque no topo */}
+        <section className="mb-8 panel p-5 border border-neon/40">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <p className="text-neon text-xs tracking-[0.2em] uppercase mb-1">
+                chave pix para pagamento
+              </p>
+              <p className="text-neon text-2xl font-mono font-bold break-all">
+                {pixKey}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn btn-xs btn-neon"
+              onClick={copyPix}
+            >
+              {copied ? "copiado!" : "copiar chave"}
+            </button>
+          </div>
+          <p className="text-muted text-[11.5px]">
+            Pague qualquer valor para o plano selecionado usando esta chave
+            PIX. Depois aguarde o codigo de ativacao no seu e-mail.
+          </p>
+        </section>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {plans.map((plan) => {
@@ -203,28 +235,32 @@ export default function CheckoutPage() {
               </span>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label className="label text-[12px]">chave PIX</label>
-                <input
-                  className="input"
-                  value={pixKey}
-                  placeholder={pixConfig?.pixKey || "digite a chave PIX"}
-                  onChange={(e) => setPixKey(e.target.value)}
-                  disabled={!!pixConfig?.pixKey}
-                />
-                {pixConfig?.pixKey && (
-                  <p className="text-muted mt-1 text-[11px]">
-                    Usando chave PIX cadastrada pelo administrador.
-                  </p>
-                )}
+            <div className="border border-neon/30 rounded-lg p-4 mb-4">
+              <p className="text-neon text-xs tracking-[0.2em] uppercase mb-2">
+                pague com esta chave
+              </p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-neon text-xl font-mono font-bold break-all">
+                  {pixKey}
+                </p>
+                <button
+                  type="button"
+                  className="btn btn-xs btn-neon"
+                  onClick={copyPix}
+                >
+                  {copied ? "copiado!" : "copiar"}
+                </button>
               </div>
+              <p className="text-muted mt-2 text-[11.5px]">
+                Chave PIX: <span className="text-neon">{pixKey}</span>. Use seu
+                app bancario para pagar via PIX.
+              </p>
             </div>
 
             <button
               type="button"
               className="btn btn-primary w-full py-3 text-sm tracking-wider uppercase"
-              disabled={creating || !(pixKey.trim() || pixConfig?.pixKey)}
+              disabled={creating}
               onClick={createPayment}
             >
               {creating ? "gerando pagamento..." : "gerar pagamento PIX"}

@@ -62,7 +62,7 @@ export const GET = apiHandler(async () => {
       appHost: await getAppHost(),
     },
     maintenance: await getMaintenance(),
-    pixKey: await getSetting("pix:key") ?? "",
+    pixKey: process.env.PIX_KEY ?? (await getSetting("pix:key")) ?? "",
   });
 });
 
