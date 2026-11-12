@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import FxLayer from "@/components/fx/fx-layer";
 
 const title = "HACKER_AI NEXUS :: Inteligencia artificial. Produtividade. Controle.";
 const description =
@@ -58,6 +59,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className="antialiased touch-manipulation">
+        <FxLayer />
         <div className="scanline" />
         {children}
       </body>

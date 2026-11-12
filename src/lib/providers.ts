@@ -40,6 +40,9 @@ export async function providerAvailability(): Promise<Record<ProviderId, boolean
     vercel: Boolean(keys.vercel),
     runapi: Boolean(keys.runapi),
     uncensored: true,
+    pollinations: true,
+    streamelements: true,
+    "google-tts": true,
   };
 }
 

@@ -12,7 +12,10 @@ export type ProviderId =
   | "opencode"
   | "vercel"
   | "uncensored"
-  | "runapi";
+  | "runapi"
+  | "pollinations"
+  | "streamelements"
+  | "google-tts";
 
 export type CompatibleProviderId = "cerebras" | "sambanova" | "nvidia" | "uncensored";
 
@@ -71,6 +74,9 @@ export const PROVIDER_IDS: ProviderId[] = [
   "ollama",
   "uncensored",
   "runapi",
+  "pollinations",
+  "streamelements",
+  "google-tts",
 ];
 
 export const PLAN_PROVIDERS: Record<string, ProviderId[]> = {
@@ -286,6 +292,105 @@ export const MODELS: ModelDef[] = [
     type: "text",
   },
   {
+    id: "pollinations/flux",
+    label: "Pollinations · FLUX",
+    provider: "pollinations",
+    modelId: "flux",
+    context: 4096,
+    requiresKey: false,
+    description: "Imagem gratuita via Pollinations.ai com modelo FLUX. Sem chave de API.",
+    free: true,
+    type: "image",
+  },
+  {
+    id: "pollinations/z-image-turbo",
+    label: "Pollinations · Z-Image Turbo",
+    provider: "pollinations",
+    modelId: "z-image-turbo",
+    context: 4096,
+    requiresKey: false,
+    description: "Imagem instantanea e barata via Pollinations (Alibaba Z-Image).",
+    free: true,
+    type: "image",
+  },
+  {
+    id: "pollinations/turbo",
+    label: "Pollinations · Turbo",
+    provider: "pollinations",
+    modelId: "turbo",
+    context: 4096,
+    requiresKey: false,
+    description: "Variante rapida do Pollinations para prototipagem de imagens.",
+    free: true,
+    type: "image",
+  },
+  {
+    id: "nvidia/flux-1-dev",
+    label: "NVIDIA · FLUX.1 Dev",
+    provider: "nvidia",
+    modelId: "black-forest-labs/flux.1-dev",
+    context: 4096,
+    requiresKey: true,
+    description: "FLUX.1 Dev da Black Forest Labs hospedado pela NVIDIA NIM.",
+    free: false,
+    type: "image",
+  },
+  {
+    id: "google-tts/pt",
+    label: "Google Voz · Portugues",
+    provider: "google-tts",
+    modelId: "pt",
+    context: 8_192,
+    requiresKey: false,
+    description: "Texto em fala em portugues sem chave de API.",
+    free: true,
+    type: "audio",
+  },
+  {
+    id: "google-tts/en",
+    label: "Google Voz · Ingles",
+    provider: "google-tts",
+    modelId: "en",
+    context: 8_192,
+    requiresKey: false,
+    description: "Texto em fala em ingles sem chave de API.",
+    free: true,
+    type: "audio",
+  },
+  {
+    id: "google-tts/es",
+    label: "Google Voz · Espanhol",
+    provider: "google-tts",
+    modelId: "es",
+    context: 8_192,
+    requiresKey: false,
+    description: "Texto em fala em espanhol sem chave de API.",
+    free: true,
+    type: "audio",
+  },
+  {
+    id: "pollinations/tts",
+    label: "Pollinations · Voz IA",
+    provider: "pollinations",
+    modelId: "tts",
+    context: 8_192,
+    requiresKey: false,
+    description: "Fala natural via Pollinations com vozes estilo OpenAI.",
+    free: true,
+    type: "audio",
+  },
+  {
+    id: "streamelements/brian",
+    label: "StreamElements · Voz Brian",
+    provider: "streamelements",
+    modelId: "brian",
+    context: 8_192,
+    requiresKey: false,
+    description: "Fala gratuita StreamElements com voz masculina.",
+    free: true,
+    type: "audio",
+  },
+  {
     id: "nvidia/sdxl",
     label: "NVIDIA · SDXL 1.0",
     provider: "nvidia",
@@ -457,6 +562,9 @@ export const PROVIDER_LABELS: Record<ProviderId, string> = {
   vercel: "Vercel AI Gateway",
   uncensored: "Uncensored Local",
   runapi: "RunAPI",
+  pollinations: "Pollinations (gratis)",
+  streamelements: "StreamElements TTS (gratis)",
+  "google-tts": "Google Voz (gratis)",
 };
 
 export function getModel(id: string): ModelDef {
