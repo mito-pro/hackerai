@@ -1,88 +1,126 @@
 import { get, run } from "./db";
 import { decryptSecret, encryptSecret } from "./crypto";
 
-export type ProviderKeyName = "groq" | "google" | "openrouter";
+export type ProviderKeyName =
+  | "groq"
+  | "google"
+  | "openrouter"
+  | "cerebras"
+  | "sambanova"
+  | "nvidia"
+  | "opencode"
+  | "vercel"
+  | "uncensored"
+  | "runapi";
 
 const SECRET_PREFIX = "provider:";
 
-export function getSetting(key: string): string | null {
-  const row = get<{ value: string }>("SELECT value FROM settings WHERE key = ?", [
-    key,
-  ]);
+const PROVIDER_ENV_KEYS: Record<ProviderKeyName, string[]> = {
+  groq: ["GROQ_API_KEY"],
+  google: ["GOOGLE_API_KEY"],
+  openrouter: ["OPENROUTER_API_KEY"],
+  cerebras: ["CEREBRAS_API_KEY"],
+  sambanova: ["SAMBANOVA_API_KEY"],
+  nvidia: ["NVIDIA_API_KEY"],
+  opencode: ["OPENCODE_API_KEY"],
+  vercel: ["VERCEL_AI_GATEWAY_API_KEY", "AI_GATEWAY_API_KEY"],
+  uncensored: ["UNCENSORED_API_KEY"],
+  runapi: ["RUNPI_API_KEY"],
+};
+
+export async function getSetting(key: string): Promise<string | null> {
+  const row = await get<{ value: string }>(
+    "SELECT value FROM settings WHERE key = ?",
+    [key]
+  );
   return row?.value ?? null;
 }
 
-export function setSetting(key: string, value: string) {
-  run(
+export async function setSetting(key: string, value: string) {
+  await run(
     "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
     [key, value]
   );
 }
 
-export function deleteSetting(key: string) {
-  run("DELETE FROM settings WHERE key = ?", [key]);
+export async function deleteSetting(key: string) {
+  await run("DELETE FROM settings WHERE key = ?", [key]);
 }
 
 function envValue(name: string) {
   return (process.env[name] || "").trim();
 }
 
-export function readSecretSetting(key: string) {
-  const stored = getSetting(key);
+export async function readSecretSetting(key: string) {
+  const stored = await getSetting(key);
   if (!stored) return "";
   if (stored.startsWith("v1:")) return decryptSecret(stored);
   return stored;
 }
 
-export function writeSecretSetting(key: string, value: string) {
+export async function writeSecretSetting(key: string, value: string) {
   if (!value) {
-    deleteSetting(key);
+    await deleteSetting(key);
     return;
   }
-  setSetting(key, encryptSecret(value));
+  await setSetting(key, encryptSecret(value));
 }
 
-export function getProviderKeys() {
-  const read = (name: ProviderKeyName) => {
-    const stored = getSetting(`${SECRET_PREFIX}${name}`);
+export async function getProviderKeys() {
+  const read = async (name: ProviderKeyName) => {
+    const stored = await getSetting(`${SECRET_PREFIX}${name}`);
     if (stored) {
       const decrypted = decryptSecret(stored);
       if (decrypted) return decrypted;
     }
-    const envKey = envValue(`${name.toUpperCase()}_API_KEY`);
-    return envKey;
+    for (const envKey of PROVIDER_ENV_KEYS[name]) {
+      const value = envValue(envKey);
+      if (value) return value;
+    }
+    return "";
   };
 
   const ollamaBaseUrl =
-    getSetting(`${SECRET_PREFIX}ollamaBaseUrl`) || envValue("OLLAMA_BASE_URL");
+    (await getSetting(`${SECRET_PREFIX}ollamaBaseUrl`)) ||
+    envValue("OLLAMA_BASE_URL");
+
+  const ollamaModel =
+    (await getSetting(`${SECRET_PREFIX}ollamaModel`)) ||
+    envValue("OLLAMA_MODEL") ||
+    "";
 
   return {
-    groq: read("groq"),
-    google: read("google"),
-    openrouter: read("openrouter"),
+    groq: await read("groq"),
+    google: await read("google"),
+    openrouter: await read("openrouter"),
+    cerebras: await read("cerebras"),
+    sambanova: await read("sambanova"),
+    nvidia: await read("nvidia"),
+    opencode: await read("opencode"),
+    vercel: await read("vercel"),
+    runapi: await read("runapi"),
     ollamaBaseUrl: ollamaBaseUrl || "http://127.0.0.1:11434/v1",
-    ollamaModel:
-      getSetting(`${SECRET_PREFIX}ollamaModel`) || envValue("OLLAMA_MODEL") || "",
+    ollamaModel,
     ollamaConfigured: Boolean(ollamaBaseUrl),
   };
 }
 
-export function setProviderKey(name: ProviderKeyName, value: string) {
+export async function setProviderKey(name: ProviderKeyName, value: string) {
   const key = `${SECRET_PREFIX}${name}`;
   if (!value) {
-    deleteSetting(key);
+    await deleteSetting(key);
     return;
   }
-  setSetting(key, encryptSecret(value));
+  await setSetting(key, encryptSecret(value));
 }
 
-export function setProviderSetting(name: string, value: string) {
+export async function setProviderSetting(name: string, value: string) {
   const key = `${SECRET_PREFIX}${name}`;
   if (!value) {
-    deleteSetting(key);
+    await deleteSetting(key);
     return;
   }
-  setSetting(key, value);
+  await setSetting(key, value);
 }
 
 export type OtpMailSettings = {
@@ -94,24 +132,31 @@ export type OtpMailSettings = {
   from: string;
 };
 
-export function getOtpMailSettings(): OtpMailSettings | null {
+export async function getOtpMailSettings(): Promise<OtpMailSettings | null> {
   const host =
-    getSetting("otp:smtpHost") || envValue("SMTP_HOST");
+    (await getSetting("otp:smtpHost")) || envValue("SMTP_HOST");
   if (!host) return null;
   const port = Number(
-    getSetting("otp:smtpPort") || envValue("SMTP_PORT") || "587"
+    (await getSetting("otp:smtpPort")) || envValue("SMTP_PORT") || "587"
   );
-  const user = getSetting("otp:smtpUser") || envValue("SMTP_USER") || "";
+  const safePort = Number.isFinite(port) ? port : 587;
+  const user = (await getSetting("otp:smtpUser")) || envValue("SMTP_USER") || "";
+  const secureSetting =
+    ((await getSetting("otp:smtpSecure")) ||
+      envValue("SMTP_SECURE") ||
+      "false") === "true";
+  // 465 usa TLS implicito; 587 usa STARTTLS. Configuracao inconsistente
+  // quebra o handshake, entao a porta define o modo correto.
+  const secure = safePort === 465 ? true : safePort === 587 ? false : secureSetting;
   return {
     host,
-    port: Number.isFinite(port) ? port : 587,
-    secure:
-      (getSetting("otp:smtpSecure") || envValue("SMTP_SECURE") || "false") ===
-      "true",
+    port: safePort,
+    secure,
     user,
-    pass: readSecretSetting("otp:smtpPass") || envValue("SMTP_PASS") || "",
+    pass:
+      (await readSecretSetting("otp:smtpPass")) || envValue("SMTP_PASS") || "",
     from:
-      getSetting("otp:mailFrom") ||
+      (await getSetting("otp:mailFrom")) ||
       envValue("MAIL_FROM") ||
       defaultMailFrom(user),
   };
@@ -136,8 +181,59 @@ export function normalizeAppHost(value: string | null | undefined) {
   return host.toLowerCase();
 }
 
-export function getAppHost() {
+export async function getAppHost() {
   return normalizeAppHost(
-    getSetting("otp:appHost") || envValue("APP_HOST") || ""
+    (await getSetting("otp:appHost")) || envValue("APP_HOST") || ""
   );
+}
+
+export type R2Config = {
+  accountId: string;
+  bucketName: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  publicUrl?: string;
+};
+
+export async function getR2Config(): Promise<R2Config | null> {
+  const accountId =
+    (await getSetting("r2:accountId")) || envValue("R2_ACCOUNT_ID") || "";
+  const bucketName =
+    (await getSetting("r2:bucketName")) || envValue("R2_BUCKET_NAME") || "";
+  const accessKeyId =
+    (await getSetting("r2:accessKeyId")) || envValue("R2_ACCESS_KEY_ID") || "";
+  const secretAccessKey =
+    (await readSecretSetting("r2:secretAccessKey")) ||
+    envValue("R2_SECRET_ACCESS_KEY") ||
+    "";
+  const publicUrl =
+    (await getSetting("r2:publicUrl")) ||
+    envValue("R2_PUBLIC_URL") ||
+    "";
+
+  if (!accountId || !bucketName || !accessKeyId || !secretAccessKey) {
+    return null;
+  }
+
+  return {
+    accountId,
+    bucketName,
+    accessKeyId,
+    secretAccessKey,
+    publicUrl: publicUrl || `https://${accountId}.r2.cloudflarestorage.com`,
+  };
+}
+
+export async function getMaintenance() {
+  return {
+    enabled: (await getSetting("maintenance:enabled")) === "true",
+    message:
+      (await getSetting("maintenance:message")) ||
+      "Sistema em manutencao. Tente novamente em alguns minutos.",
+  };
+}
+
+export async function setMaintenance(enabled: boolean, message?: string) {
+  await setSetting("maintenance:enabled", enabled ? "true" : "false");
+  if (message !== undefined) await setSetting("maintenance:message", message.trim());
 }

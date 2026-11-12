@@ -24,27 +24,27 @@ export function dayStart(date = new Date()) {
   return value;
 }
 
-export function syncCounters(userId: string): UserRow | null {
-  const user = get<UserRow>("SELECT * FROM users WHERE id = ?", [userId]);
+export async function syncCounters(userId: string): Promise<UserRow | null> {
+  const user = await get<UserRow>("SELECT * FROM users WHERE id = ?", [userId]);
   if (!user) return null;
 
   const period = monthStart().toISOString();
   const day = dayStart().toISOString();
 
   if (user.period_start !== period) {
-    run("UPDATE users SET tokens_used = 0, period_start = ? WHERE id = ?", [
+    await run("UPDATE users SET tokens_used = 0, period_start = ? WHERE id = ?", [
       period,
       userId,
     ]);
   }
   if (user.day_start !== day) {
-    run("UPDATE users SET messages_today = 0, day_start = ? WHERE id = ?", [
+    await run("UPDATE users SET messages_today = 0, day_start = ? WHERE id = ?", [
       day,
       userId,
     ]);
   }
 
-  return get<UserRow>("SELECT * FROM users WHERE id = ?", [userId]) ?? null;
+  return (await get<UserRow>("SELECT * FROM users WHERE id = ?", [userId])) ?? null;
 }
 
 export function tokenQuota(user: UserRow, plan: Plan) {
@@ -86,7 +86,7 @@ export function checkQuota(user: UserRow, plan: Plan): QuotaCheck {
   return { allowed: true, used, limit };
 }
 
-export function recordUsage(params: {
+export async function recordUsage(params: {
   userId: string;
   chatId?: string | null;
   model: string;
@@ -95,7 +95,7 @@ export function recordUsage(params: {
   outputTokens: number;
 }) {
   const total = params.inputTokens + params.outputTokens;
-  run(
+  await run(
     "INSERT INTO usage_logs (id, user_id, chat_id, model, provider, input_tokens, output_tokens, total_tokens, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [
       generateId("use"),
@@ -109,15 +109,15 @@ export function recordUsage(params: {
       nowIso(),
     ]
   );
-  run("UPDATE users SET tokens_used = tokens_used + ? WHERE id = ?", [
+  await run("UPDATE users SET tokens_used = tokens_used + ? WHERE id = ?", [
     total,
     params.userId,
   ]);
   return total;
 }
 
-export function incrementMessageCount(userId: string) {
-  run("UPDATE users SET messages_today = messages_today + 1 WHERE id = ?", [
+export async function incrementMessageCount(userId: string) {
+  await run("UPDATE users SET messages_today = messages_today + 1 WHERE id = ?", [
     userId,
   ]);
 }
@@ -141,6 +141,6 @@ export function usageSummary(user: UserRow, plan: Plan): UsageSummary {
   };
 }
 
-export function planForUser(user: UserRow): Plan {
-  return getPlan(user.plan_id) ?? getPlan("free")!;
+export async function planForUser(user: UserRow): Promise<Plan> {
+  return (await getPlan(user.plan_id)) ?? (await getPlan("free"))!;
 }

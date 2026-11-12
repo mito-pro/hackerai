@@ -11,6 +11,7 @@ import { apiHandler } from "@/lib/errors";
 import { ensureChat, saveMessage, titleFromMessage, touchChat } from "@/lib/chats";
 import { nexusReply } from "@/lib/nexus";
 import { getLanguageModel, providerAvailability } from "@/lib/providers";
+import { defaultModelFor, providersForPlan } from "@/lib/model-registry";
 import { hasCapability } from "@/lib/plans";
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
@@ -23,9 +24,11 @@ import {
 } from "@/lib/usage";
 import { estimateTokens, generateId } from "@/lib/utils";
 import { OMEGA_SYSTEM_PROMPT, listOmegaModels, resolveModel } from "@/lib/omega";
+import { maintenanceBlock } from "@/lib/maintenance";
+import { isModelAllowedForPlan } from "@/lib/model-registry";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const SYSTEM_PROMPT = `Voce e NEXUS, o nucleo de IA de um terminal cyberpunk.
 Responda sempre em portugues do Brasil, de forma direta, tecnica e bem estruturada.
@@ -83,7 +86,9 @@ export const POST = apiHandler(async (request: Request) => {
   }
 
   const user = await requireUser();
-  const fresh = syncCounters(user.id);
+  const blocked = await maintenanceBlock(user);
+  if (blocked) return blocked;
+  const fresh = await syncCounters(user.id);
   if (!fresh) {
     return NextResponse.json(
       { error: "unauthorized", message: "Sessao expirada." },
@@ -91,7 +96,7 @@ export const POST = apiHandler(async (request: Request) => {
     );
   }
 
-  const plan = planForUser(fresh);
+  const plan = await planForUser(fresh);
   const quota = checkQuota(fresh, plan);
   if (!quota.allowed) {
     return NextResponse.json(
@@ -111,8 +116,16 @@ export const POST = apiHandler(async (request: Request) => {
     );
   }
 
-  const availability = providerAvailability();
-  const requestedId = body.model ?? "nexus-local";
+  const availability = await providerAvailability();
+  const isAdmin = fresh.role === "admin";
+  const planProviders = providersForPlan(plan, isAdmin);
+  const requestedId =
+    body.model ??
+    defaultModelFor(
+      availability,
+      fresh.plan_id,
+      isAdmin ? undefined : planProviders
+    );
   const model = await resolveModel(requestedId);
 
   if (!model) {
@@ -138,11 +151,49 @@ export const POST = apiHandler(async (request: Request) => {
     );
   }
 
+  if (
+    !isModelAllowedForPlan(
+      model,
+      fresh.plan_id,
+      fresh.role === "admin",
+      plan.capabilities,
+      planProviders
+    )
+  ) {
+    return NextResponse.json(
+      {
+        error: "forbidden",
+        message: `O modelo ${model.label} nao faz parte do plano ${plan.name}. Escolha um modelo disponivel para o seu plano.`,
+      },
+      { status: 403 }
+    );
+  }
+
   if (model.provider !== "local" && !availability[model.provider]) {
     return NextResponse.json(
       {
         error: "provider_missing",
-        message: `O provedor ${model.provider} ainda nao esta configurado. Admin > Provedores.`,
+        message: `O provedor ${model.provider} ainda nao esta configurado. Use o NEXUS Core local ou cadastre a chave em Admin > Provedores.`,
+      },
+      { status: 400 }
+    );
+  }
+
+  if (model.type === "image") {
+    return NextResponse.json(
+      {
+        error: "use_image_route",
+        message: "Use a rota /api/generate-image para gerar imagens com este modelo.",
+      },
+      { status: 400 }
+    );
+  }
+
+  if (model.type === "audio") {
+    return NextResponse.json(
+      {
+        error: "use_audio_route",
+        message: "Use a rota /api/generate-audio para gerar audio com este modelo.",
       },
       { status: 400 }
     );
@@ -153,16 +204,16 @@ export const POST = apiHandler(async (request: Request) => {
   const userText = textFromParts(lastUser?.parts);
   const chatId = body.id ?? generateId("chat");
 
-  ensureChat({
+  await ensureChat({
     id: chatId,
     userId: fresh.id,
     model: model.id,
     title: userText ? titleFromMessage(userText) : "Nova sessao",
   });
-  touchChat(chatId, model.id);
+  await touchChat(chatId, model.id);
 
   if (lastUser) {
-    saveMessage({
+    await saveMessage({
       id: lastUser.id,
       chatId,
       userId: fresh.id,
@@ -171,10 +222,10 @@ export const POST = apiHandler(async (request: Request) => {
       tokens: estimateTokens(userText),
     });
   }
-  incrementMessageCount(fresh.id);
+  await incrementMessageCount(fresh.id);
 
   const outputBudget = Math.min(
-    4096,
+    8192,
     Math.max(256, Math.floor(plan.maxContext / 4))
   );
   const inputBudget = Math.max(512, plan.maxContext - outputBudget);
@@ -217,7 +268,7 @@ export const POST = apiHandler(async (request: Request) => {
       }
 
       const result = streamText({
-        model: getLanguageModel(model),
+        model: await getLanguageModel(model),
         system: model.uncensored ? OMEGA_SYSTEM_PROMPT : SYSTEM_PROMPT,
         messages: convertToModelMessages(trimmed.messages),
         abortSignal: request.signal,
@@ -235,7 +286,7 @@ export const POST = apiHandler(async (request: Request) => {
     onFinish: async ({ messages }) => {
       const assistant = [...messages].reverse().find((m) => m.role === "assistant");
       if (assistant) {
-        saveMessage({
+        await saveMessage({
           id: assistant.id,
           chatId,
           userId: fresh.id,
@@ -245,7 +296,7 @@ export const POST = apiHandler(async (request: Request) => {
         });
       }
 
-      recordUsage({
+      await recordUsage({
         userId: fresh.id,
         chatId,
         model: model.id,
@@ -258,12 +309,12 @@ export const POST = apiHandler(async (request: Request) => {
       const message = error instanceof Error ? error.message : String(error);
       console.error("[NEXUS] erro no stream:", message);
       if (message.toLowerCase().includes("api key") || message.includes("401")) {
-        return "Provedor recusou a chave da API. Revise Admin > Provedores.";
+        throw new Error("Provedor recusou a chave da API. Revise Admin > Provedores.");
       }
       if (message.toLowerCase().includes("fetch failed")) {
-        return "Nao foi possivel contatar o provedor. Tente o motor NEXUS Core local.";
+        throw new Error("Nao foi possivel contatar o provedor. Tente o motor NEXUS Core local.");
       }
-      return `Falha no stream: ${message.slice(0, 200)}`;
+      throw new Error(`Falha no stream: ${message.slice(0, 200)}`);
     },
   });
 

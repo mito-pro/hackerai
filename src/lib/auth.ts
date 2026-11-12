@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { all, get, nowIso, run, type UserRow } from "./db";
-import { randomToken, sha256 } from "./crypto";
+import { hmac, randomToken, safeEqual, sha256 } from "./crypto";
 import { ApiError } from "./errors";
 import { getPlan, hasCapability } from "./plans";
 import { adminEmailAllowlist } from "./admins";
@@ -22,16 +22,56 @@ export type SessionUser = {
   lastLoginAt: string | null;
 };
 
+type SessionClaims = {
+  sub: string;
+  email: string;
+  name: string;
+  role: "user" | "admin";
+  planId: string;
+  exp: number;
+  jti: string;
+};
+
+function signClaims(claims: SessionClaims) {
+  const payload = Buffer.from(JSON.stringify(claims)).toString("base64url");
+  return `${payload}.${hmac(payload)}`;
+}
+
+function verifyClaims(token: string): SessionClaims | null {
+  const [payload, sig] = token.split(".");
+  if (!payload || !sig) return null;
+  if (!safeEqual(hmac(payload), sig)) return null;
+  try {
+    const claims = JSON.parse(
+      Buffer.from(payload, "base64url").toString("utf8")
+    ) as SessionClaims;
+    if (
+      !claims.sub ||
+      !claims.email ||
+      !claims.jti ||
+      typeof claims.exp !== "number" ||
+      claims.exp * 1000 < Date.now()
+    ) {
+      return null;
+    }
+    return claims;
+  } catch {
+    return null;
+  }
+}
+
 function mapUser(row: UserRow): SessionUser {
   const allowlist = adminEmailAllowlist();
-  const blocked =
-    allowlist.length > 0 && !allowlist.includes(row.email.trim().toLowerCase());
+  // A allowlist PROMOVE admin: e-mails listados sao sempre admin.
+  // E-mails fora da lista mantem o papel gravado no banco (nenhum usuario
+  // perde acesso por troca de variavel de ambiente).
+  const listed = allowlist.includes(row.email.trim().toLowerCase());
 
   return {
     id: row.id,
     email: row.email,
     name: row.name,
-    role: blocked ? "user" : row.role,
+    role: listed ? "admin" : row.role,
     planId: row.plan_id,
     status: row.status,
     tokensUsed: row.tokens_used,
@@ -42,23 +82,53 @@ function mapUser(row: UserRow): SessionUser {
   };
 }
 
+async function hydrateUser(claims: SessionClaims): Promise<UserRow | null> {
+  const existing = await get<UserRow>("SELECT * FROM users WHERE id = ?", [
+    claims.sub,
+  ]);
+  if (existing) return existing;
+
+  // Instancia serverless com /tmp proprio: recria a linha do usuario
+  // a partir do cookie assinado para o login continuar valendo.
+  const now = nowIso();
+  const day = new Date().toISOString().slice(0, 10);
+  await run(
+    `INSERT INTO users
+      (id, email, name, role, plan_id, status, tokens_used, messages_today,
+       period_start, day_start, created_at, last_login_at)
+     VALUES (?, ?, ?, ?, ?, 'active', 0, 0, ?, ?, ?, ?)
+     ON CONFLICT (id) DO NOTHING`,
+    [
+      claims.sub,
+      claims.email,
+      claims.name,
+      claims.role === "admin" ? "admin" : "user",
+      claims.planId || "free",
+      day,
+      day,
+      now,
+      now,
+    ]
+  );
+
+  const byEmail = await get<UserRow>("SELECT * FROM users WHERE email = ?", [
+    claims.email,
+  ]);
+  if (byEmail) return byEmail;
+
+  return (await get<UserRow>("SELECT * FROM users WHERE id = ?", [claims.sub])) ?? null;
+}
+
 export async function getSessionUser(): Promise<SessionUser | null> {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
   if (!token) return null;
 
-  const row = get<UserRow & { session_id: string; expires_at: string }>(
-    `SELECT u.*, s.id AS session_id, s.expires_at AS expires_at
-     FROM sessions s JOIN users u ON u.id = s.user_id
-     WHERE s.token_hash = ?`,
-    [sha256(token)]
-  );
+  const claims = verifyClaims(token);
+  if (!claims) return null;
 
+  const row = await hydrateUser(claims);
   if (!row) return null;
-  if (new Date(row.expires_at).getTime() < Date.now()) {
-    run("DELETE FROM sessions WHERE id = ?", [row.session_id]);
-    return null;
-  }
   if (row.status !== "active") return null;
 
   return mapUser(row);
@@ -68,32 +138,40 @@ export async function createSession(
   userId: string,
   userAgent?: string | null
 ) {
-  const token = randomToken(32);
-  const expires = new Date(Date.now() + SESSION_DAYS * 86400_000);
+  const user = await get<UserRow>("SELECT * FROM users WHERE id = ?", [userId]);
+  if (!user) throw new ApiError(404, "user_not_found", "Usuario nao encontrado.");
 
-  const row = get<{ plan_id: string }>(
-    "SELECT plan_id FROM users WHERE id = ?",
-    [userId]
-  );
-  const plan = row ? getPlan(row.plan_id) : null;
+  const plan = await getPlan(user.plan_id);
   if (plan && !hasCapability(plan, "multi_session")) {
-    run("DELETE FROM sessions WHERE user_id = ?", [userId]);
+    await run("DELETE FROM sessions WHERE user_id = ?", [userId]);
   }
 
-  run(
+  const jti = `ses_${randomToken(8)}`;
+  const exp = Math.floor((Date.now() + SESSION_DAYS * 86400_000) / 1000);
+  const claims: SessionClaims = {
+    sub: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role === "admin" ? "admin" : "user",
+    planId: user.plan_id,
+    exp,
+    jti,
+  };
+
+  await   await run(
     "INSERT INTO sessions (id, user_id, token_hash, user_agent, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
     [
-      `ses_${randomToken(8)}`,
-      userId,
-      sha256(token),
+      jti,
+      user.id,
+      sha256(jti),
       userAgent ?? null,
       nowIso(),
-      expires.toISOString(),
+      new Date(exp * 1000).toISOString(),
     ]
   );
 
   const store = await cookies();
-  store.set(SESSION_COOKIE, token, {
+  store.set(SESSION_COOKIE, signClaims(claims), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -101,14 +179,17 @@ export async function createSession(
     maxAge: SESSION_DAYS * 86400,
   });
 
-  return token;
+  return jti;
 }
 
 export async function destroySession() {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
   if (token) {
-    run("DELETE FROM sessions WHERE token_hash = ?", [sha256(token)]);
+    const claims = verifyClaims(token);
+    if (claims) {
+      await run("DELETE FROM sessions WHERE id = ?", [claims.jti]);
+    }
   }
   store.delete(SESSION_COOKIE);
 }
@@ -137,26 +218,28 @@ export type SessionRow = {
   expires_at: string;
 };
 
-export function listSessions(): SessionRow[] {
-  run("DELETE FROM sessions WHERE expires_at < ?", [nowIso()]);
-  return all<SessionRow>(
+export async function listSessions(): Promise<SessionRow[]> {
+  await run("DELETE FROM sessions WHERE expires_at < ?", [nowIso()]);
+  return await all<SessionRow>(
     `SELECT s.id, s.user_id, u.email, u.role, s.user_agent, s.created_at, s.expires_at
      FROM sessions s JOIN users u ON u.id = s.user_id
      ORDER BY s.created_at DESC`
   );
 }
 
-export function revokeSession(sessionId: string) {
-  const result = run("DELETE FROM sessions WHERE id = ?", [sessionId]);
+export async function revokeSession(sessionId: string) {
+  const result = await run("DELETE FROM sessions WHERE id = ?", [sessionId]);
   return result.changes > 0;
 }
 
-export function revokeUserSessions(userId: string) {
-  const result = run("DELETE FROM sessions WHERE user_id = ?", [userId]);
+export async function revokeUserSessions(userId: string) {
+  const result = await run("DELETE FROM sessions WHERE user_id = ?", [userId]);
   return result.changes > 0;
 }
 
-export function purgeExpiredSessions() {
-  const result = run("DELETE FROM sessions WHERE expires_at < ?", [nowIso()]);
+export async function purgeExpiredSessions() {
+  const result = await run("DELETE FROM sessions WHERE expires_at < ?", [
+    nowIso(),
+  ]);
   return result.changes;
 }

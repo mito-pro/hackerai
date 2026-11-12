@@ -4,6 +4,11 @@ import {
   isPlanCapability,
   type PlanCapability,
 } from "./capabilities";
+import {
+  PLAN_PROVIDERS,
+  normalizeProviders,
+  type ProviderId,
+} from "./model-registry";
 
 export { PLAN_CAPABILITIES } from "./capabilities";
 export type { PlanCapability } from "./capabilities";
@@ -20,6 +25,7 @@ export type Plan = {
   features: string[];
   historyDays: number;
   capabilities: PlanCapability[];
+  providers: ProviderId[];
   priority: number;
   isDefault: boolean;
 };
@@ -47,26 +53,31 @@ function mapPlan(row: PlanRow): Plan {
     features: parseList(row.features),
     historyDays: row.history_days,
     capabilities: parseList(row.capabilities).filter(isPlanCapability),
+    providers: normalizeProviders(
+      parseList(row.providers),
+      PLAN_PROVIDERS[row.id] ?? PLAN_PROVIDERS.free
+    ),
     priority: row.priority,
     isDefault: row.is_default === 1,
   };
 }
 
-export function listPlans(): Plan[] {
-  return all<PlanRow>(
+export async function listPlans(): Promise<Plan[]> {
+  const rows = await all<PlanRow>(
     "SELECT * FROM plans ORDER BY priority ASC, price ASC"
-  ).map(mapPlan);
+  );
+  return rows.map(mapPlan);
 }
 
-export function getPlan(id: string): Plan | null {
-  const row = get<PlanRow>("SELECT * FROM plans WHERE id = ?", [id]);
+export async function getPlan(id: string): Promise<Plan | null> {
+  const row = await get<PlanRow>("SELECT * FROM plans WHERE id = ?", [id]);
   return row ? mapPlan(row) : null;
 }
 
-export function getDefaultPlan(): Plan {
+export async function getDefaultPlan(): Promise<Plan> {
   const row =
-    get<PlanRow>("SELECT * FROM plans WHERE is_default = 1 LIMIT 1") ||
-    get<PlanRow>("SELECT * FROM plans ORDER BY priority ASC LIMIT 1");
+    (await get<PlanRow>("SELECT * FROM plans WHERE is_default = 1 LIMIT 1")) ||
+    (await get<PlanRow>("SELECT * FROM plans ORDER BY priority ASC LIMIT 1"));
   if (!row) throw new Error("Nenhum plano configurado");
   return mapPlan(row);
 }
@@ -75,10 +86,10 @@ export function hasCapability(plan: Plan, capability: PlanCapability) {
   return capabilityEnabled(plan.capabilities, capability);
 }
 
-export function upsertPlan(plan: Plan) {
-  run(
-    `INSERT INTO plans (id, name, category, description, price, monthly_tokens, daily_messages, max_context, features, history_days, capabilities, priority, is_default)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+export async function upsertPlan(plan: Plan): Promise<void> {
+  await run(
+    `INSERT INTO plans (id, name, category, description, price, monthly_tokens, daily_messages, max_context, features, history_days, capabilities, providers, priority, is_default)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        name = excluded.name,
        category = excluded.category,
@@ -90,6 +101,7 @@ export function upsertPlan(plan: Plan) {
        features = excluded.features,
        history_days = excluded.history_days,
        capabilities = excluded.capabilities,
+       providers = excluded.providers,
        priority = excluded.priority,
        is_default = excluded.is_default`,
     [
@@ -104,6 +116,7 @@ export function upsertPlan(plan: Plan) {
       JSON.stringify(plan.features),
       plan.historyDays,
       JSON.stringify(plan.capabilities),
+      JSON.stringify(plan.providers),
       plan.priority,
       plan.isDefault ? 1 : 0,
     ]

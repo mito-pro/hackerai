@@ -1,16 +1,18 @@
 import { all, get, nowIso, run, type ChatRow, type MessageRow } from "./db";
 import { generateId } from "./utils";
 
-export function ensureChat(params: {
+export async function ensureChat(params: {
   id: string;
   userId: string;
   title?: string;
   model?: string;
 }) {
-  const existing = get<ChatRow>("SELECT * FROM chats WHERE id = ?", [params.id]);
+  const existing = await get<ChatRow>("SELECT * FROM chats WHERE id = ?", [
+    params.id,
+  ]);
   if (existing) return existing;
 
-  run(
+  await run(
     "INSERT INTO chats (id, user_id, title, model, message_count, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, ?)",
     [
       params.id,
@@ -22,21 +24,21 @@ export function ensureChat(params: {
     ]
   );
 
-  return get<ChatRow>("SELECT * FROM chats WHERE id = ?", [params.id])!;
+  return (await get<ChatRow>("SELECT * FROM chats WHERE id = ?", [params.id]))!;
 }
 
-export function touchChat(chatId: string, model?: string) {
+export async function touchChat(chatId: string, model?: string) {
   if (model) {
-    run(
+    await run(
       "UPDATE chats SET updated_at = ?, model = ? WHERE id = ?",
       [nowIso(), model, chatId]
     );
     return;
   }
-  run("UPDATE chats SET updated_at = ? WHERE id = ?", [nowIso(), chatId]);
+  await run("UPDATE chats SET updated_at = ? WHERE id = ?", [nowIso(), chatId]);
 }
 
-export function saveMessage(params: {
+export async function saveMessage(params: {
   id?: string;
   chatId: string;
   userId: string;
@@ -45,12 +47,12 @@ export function saveMessage(params: {
   tokens?: number;
 }) {
   const id = params.id ?? generateId("msg");
-  const exists = get<{ id: string }>(
+  const exists = await get<{ id: string }>(
     "SELECT id FROM messages WHERE id = ?",
     [id]
   );
 
-  run(
+  await run(
     "INSERT INTO messages (id, chat_id, user_id, role, parts, tokens, created_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET role = excluded.role, parts = excluded.parts, tokens = excluded.tokens",
     [
       id,
@@ -64,50 +66,53 @@ export function saveMessage(params: {
   );
 
   if (!exists) {
-    run(
+    await run(
       "UPDATE chats SET message_count = message_count + 1, updated_at = ? WHERE id = ?",
       [nowIso(), params.chatId]
     );
   } else {
-    run("UPDATE chats SET updated_at = ? WHERE id = ?", [nowIso(), params.chatId]);
+    await run("UPDATE chats SET updated_at = ? WHERE id = ?", [
+      nowIso(),
+      params.chatId,
+    ]);
   }
 
   return id;
 }
 
-export function listChats(userId: string, limit = 50) {
-  return all<ChatRow>(
+export async function listChats(userId: string, limit = 50) {
+  return await all<ChatRow>(
     "SELECT * FROM chats WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?",
     [userId, limit]
   );
 }
 
-export function getChat(chatId: string) {
-  return get<ChatRow>("SELECT * FROM chats WHERE id = ?", [chatId]);
+export async function getChat(chatId: string) {
+  return await get<ChatRow>("SELECT * FROM chats WHERE id = ?", [chatId]);
 }
 
-export function deleteChat(chatId: string, userId?: string) {
-  const chat = getChat(chatId);
+export async function deleteChat(chatId: string, userId?: string) {
+  const chat = await getChat(chatId);
   if (!chat) return false;
   if (userId && chat.user_id !== userId) return false;
-  run("DELETE FROM messages WHERE chat_id = ?", [chatId]);
-  run("DELETE FROM chats WHERE id = ?", [chatId]);
+  await run("DELETE FROM messages WHERE chat_id = ?", [chatId]);
+  await run("DELETE FROM chats WHERE id = ?", [chatId]);
   return true;
 }
 
-export function pruneChats(userId: string, historyDays: number) {
+export async function pruneChats(userId: string, historyDays: number) {
   if (!historyDays || historyDays <= 0) return 0;
   const cutoff = new Date(Date.now() - historyDays * 86_400_000).toISOString();
-  const stale = all<{ id: string }>(
+  const stale = await all<{ id: string }>(
     "SELECT id FROM chats WHERE user_id = ? AND updated_at < ?",
     [userId, cutoff]
   );
-  for (const chat of stale) deleteChat(chat.id);
+  for (const chat of stale) await deleteChat(chat.id);
   return stale.length;
 }
 
-export function getChatMessages(chatId: string) {
-  return all<MessageRow>(
+export async function getChatMessages(chatId: string) {
+  return await all<MessageRow>(
     "SELECT * FROM messages WHERE chat_id = ? ORDER BY created_at ASC",
     [chatId]
   );

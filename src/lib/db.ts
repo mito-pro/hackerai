@@ -1,123 +1,215 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { neon } from "@neondatabase/serverless";
 import { DEFAULT_PLANS } from "./plans-data";
+import { writableFile } from "./storage";
 
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS users (
-  id TEXT PRIMARY KEY,
-  email TEXT NOT NULL UNIQUE,
-  name TEXT NOT NULL DEFAULT '',
-  role TEXT NOT NULL DEFAULT 'user',
-  plan_id TEXT NOT NULL DEFAULT 'free',
-  status TEXT NOT NULL DEFAULT 'active',
-  tokens_used INTEGER NOT NULL DEFAULT 0,
-  messages_today INTEGER NOT NULL DEFAULT 0,
-  period_start TEXT NOT NULL,
-  day_start TEXT NOT NULL,
-  token_override INTEGER,
-  created_at TEXT NOT NULL,
-  last_login_at TEXT
-);
+export type SqlParam = string | number | null | undefined;
 
-CREATE TABLE IF NOT EXISTS otp_codes (
-  id TEXT PRIMARY KEY,
-  email TEXT NOT NULL,
-  code_hash TEXT NOT NULL,
-  expires_at TEXT NOT NULL,
-  attempts INTEGER NOT NULL DEFAULT 0,
-  consumed INTEGER NOT NULL DEFAULT 0,
-  ip TEXT,
-  created_at TEXT NOT NULL
-);
+const SCHEMA_STATEMENTS: string[] = [
+  `CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL DEFAULT '',
+    role TEXT NOT NULL DEFAULT 'user',
+    plan_id TEXT NOT NULL DEFAULT 'free',
+    status TEXT NOT NULL DEFAULT 'active',
+    tokens_used INTEGER NOT NULL DEFAULT 0,
+    messages_today INTEGER NOT NULL DEFAULT 0,
+    period_start TEXT NOT NULL,
+    day_start TEXT NOT NULL,
+    token_override INTEGER,
+    created_at TEXT NOT NULL,
+    last_login_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS otp_codes (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL,
+    code_hash TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    consumed INTEGER NOT NULL DEFAULT 0,
+    ip TEXT,
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    user_agent TEXT,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS chats (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    title TEXT NOT NULL DEFAULT 'Nova sessao',
+    model TEXT NOT NULL DEFAULT 'nexus-local',
+    message_count INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS messages (
+    id TEXT PRIMARY KEY,
+    chat_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    role TEXT NOT NULL,
+    parts TEXT NOT NULL,
+    tokens INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS usage_logs (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    chat_id TEXT,
+    model TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    total_tokens INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS audit_logs (
+    id TEXT PRIMARY KEY,
+    actor_id TEXT,
+    actor_email TEXT NOT NULL,
+    action TEXT NOT NULL,
+    target_type TEXT NOT NULL,
+    target_id TEXT,
+    target_email TEXT,
+    details TEXT,
+    ip TEXT,
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS plan_history (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    user_email TEXT NOT NULL,
+    old_plan_id TEXT,
+    new_plan_id TEXT NOT NULL,
+    changed_by TEXT NOT NULL,
+    changed_by_email TEXT,
+    reason TEXT,
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS plans (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL DEFAULT '',
+    price DOUBLE PRECISION NOT NULL DEFAULT 0,
+    monthly_tokens INTEGER NOT NULL DEFAULT 0,
+    daily_messages INTEGER NOT NULL DEFAULT 0,
+    max_context INTEGER NOT NULL DEFAULT 8000,
+    features TEXT NOT NULL DEFAULT '[]',
+    history_days INTEGER NOT NULL DEFAULT 7,
+    capabilities TEXT NOT NULL DEFAULT '[]',
+    providers TEXT NOT NULL DEFAULT '[]',
+    priority INTEGER NOT NULL DEFAULT 0,
+    is_default INTEGER NOT NULL DEFAULT 0
+  )`,
+  `CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(chat_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_usage_user ON usage_logs(user_id, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token_hash)`,
+  `CREATE INDEX IF NOT EXISTS idx_otp_email ON otp_codes(email, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_logs(target_type, target_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_plan_history_user ON plan_history(user_id, created_at DESC)`,
+];
 
-CREATE TABLE IF NOT EXISTS sessions (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  token_hash TEXT NOT NULL UNIQUE,
-  user_agent TEXT,
-  created_at TEXT NOT NULL,
-  expires_at TEXT NOT NULL
-);
+const DATABASE_URL = (
+  process.env.DATABASE_URL ||
+  process.env.POSTGRES_URL ||
+  process.env.POSTGRES_PRISMA_URL ||
+  ""
+).trim();
 
-CREATE TABLE IF NOT EXISTS chats (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  title TEXT NOT NULL DEFAULT 'Nova sessao',
-  model TEXT NOT NULL DEFAULT 'nexus-local',
-  message_count INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
+export const USING_POSTGRES = Boolean(DATABASE_URL);
 
-CREATE TABLE IF NOT EXISTS messages (
-  id TEXT PRIMARY KEY,
-  chat_id TEXT NOT NULL,
-  user_id TEXT NOT NULL,
-  role TEXT NOT NULL,
-  parts TEXT NOT NULL,
-  tokens INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL
-);
+let pgClient: ReturnType<typeof neon> | null = null;
 
-CREATE TABLE IF NOT EXISTS usage_logs (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  chat_id TEXT,
-  model TEXT NOT NULL,
-  provider TEXT NOT NULL,
-  input_tokens INTEGER NOT NULL DEFAULT 0,
-  output_tokens INTEGER NOT NULL DEFAULT 0,
-  total_tokens INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL
-);
+function postgres() {
+  if (!pgClient) pgClient = neon(DATABASE_URL);
+  return pgClient;
+}
 
-CREATE TABLE IF NOT EXISTS plans (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  category TEXT NOT NULL DEFAULT '',
-  description TEXT NOT NULL DEFAULT '',
-  price REAL NOT NULL DEFAULT 0,
-  monthly_tokens INTEGER NOT NULL DEFAULT 0,
-  daily_messages INTEGER NOT NULL DEFAULT 0,
-  max_context INTEGER NOT NULL DEFAULT 8000,
-  features TEXT NOT NULL DEFAULT '[]',
-  history_days INTEGER NOT NULL DEFAULT 7,
-  capabilities TEXT NOT NULL DEFAULT '[]',
-  priority INTEGER NOT NULL DEFAULT 0,
-  is_default INTEGER NOT NULL DEFAULT 0
-);
+async function pgQuery(text: string, params: SqlParam[] = []) {
+  const rows = await postgres().query(text, params);
+  return (rows ?? []) as Record<string, unknown>[];
+}
 
-CREATE TABLE IF NOT EXISTS settings (
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL
-);
+function toPostgresSql(sql: string) {
+  let index = 0;
+  return sql.replace(/\?/g, () => `$${++index}`);
+}
 
-CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(chat_id);
-CREATE INDEX IF NOT EXISTS idx_usage_user ON usage_logs(user_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token_hash);
-CREATE INDEX IF NOT EXISTS idx_otp_email ON otp_codes(email, created_at);
-`;
+function withReturning(sql: string) {
+  if (/\breturning\b/i.test(sql)) return sql;
+  if (!/^\s*(insert|update|delete)\b/i.test(sql)) return sql;
+  return `${sql} RETURNING 1`;
+}
+
+function normalizeParams(params: SqlParam[]) {
+  return params.map((value) => (value === undefined ? null : value));
+}
+
+function normalizeSqliteParams(params: SqlParam[]) {
+  return params.map((value) => (value === undefined ? null : value));
+}
+
+const globalForDb = globalThis as unknown as {
+  __hackeraiDb?: DatabaseSync;
+  __hackeraiInit?: Promise<void>;
+};
+
+let sqliteDatabase: DatabaseSync | null = null;
 
 function createDatabase() {
   const file =
-    process.env.DATABASE_PATH ||
-    path.join(process.cwd(), "data", "hackerai.db");
+    process.env.DATABASE_PATH || writableFile("hackerai.db");
   const dir = path.dirname(file);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  try {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  } catch {
+    // Sistema de arquivos somente leitura (serverless): usa /tmp.
+    const fallback = path.join(os.tmpdir(), "hackerai");
+    fs.mkdirSync(fallback, { recursive: true });
+    return openDatabase(path.join(fallback, "hackerai.db"));
+  }
 
+  return openDatabase(file);
+}
+
+function openDatabase(file: string) {
   const database = new DatabaseSync(file);
   database.exec("PRAGMA journal_mode = WAL;");
   database.exec("PRAGMA foreign_keys = ON;");
   database.exec("PRAGMA busy_timeout = 5000;");
-  database.exec(SCHEMA);
-  migrate(database);
-  seedPlans(database);
-  migrateOmegaCapabilities(database);
+  for (const statement of SCHEMA_STATEMENTS) database.exec(statement);
+  migrateSqlite(database);
+  seedPlansSqlite(database);
+  migratePlanProvidersSqlite(database);
+  migrateOmegaCapabilitiesSqlite(database);
   return database;
 }
 
-function migrate(database: DatabaseSync) {
+function sqlite() {
+  if (!sqliteDatabase) {
+    sqliteDatabase = globalForDb.__hackeraiDb ?? createDatabase();
+    if (process.env.NODE_ENV !== "production") {
+      globalForDb.__hackeraiDb = sqliteDatabase;
+    }
+  }
+  return sqliteDatabase;
+}
+
+function migrateSqlite(database: DatabaseSync) {
   const columns = database
     .prepare("PRAGMA table_info(plans)")
     .all() as Array<{ name: string }>;
@@ -138,13 +230,19 @@ function migrate(database: DatabaseSync) {
       "ALTER TABLE plans ADD COLUMN category TEXT NOT NULL DEFAULT ''"
     );
   }
+  if (!names.has("providers")) {
+    database.exec(
+      "ALTER TABLE plans ADD COLUMN providers TEXT NOT NULL DEFAULT '[]'"
+    );
+  }
 }
 
-function seedPlans(database: DatabaseSync) {
+function seedPlansSqlite(database: DatabaseSync) {
   const insert = database.prepare(
-    `INSERT OR IGNORE INTO plans
-      (id, name, category, description, price, monthly_tokens, daily_messages, max_context, features, history_days, capabilities, priority, is_default)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO plans
+      (id, name, category, description, price, monthly_tokens, daily_messages, max_context, features, history_days, capabilities, providers, priority, is_default)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (id) DO NOTHING`
   );
   for (const plan of DEFAULT_PLANS) {
     insert.run(
@@ -159,16 +257,17 @@ function seedPlans(database: DatabaseSync) {
       JSON.stringify(plan.features),
       plan.historyDays,
       JSON.stringify(plan.capabilities),
+      JSON.stringify(plan.providers),
       plan.priority,
       plan.isDefault ? 1 : 0
     );
   }
-  backfillPlanDefaults(database);
+  backfillPlanDefaultsSqlite(database);
 }
 
 const PLAN_BACKFILL_KEY = "migration:plans-capabilities-v1";
 
-function backfillPlanDefaults(database: DatabaseSync) {
+function backfillPlanDefaultsSqlite(database: DatabaseSync) {
   const marker = database
     .prepare("SELECT value FROM settings WHERE key = ?")
     .get(PLAN_BACKFILL_KEY) as { value: string } | undefined;
@@ -194,9 +293,32 @@ function backfillPlanDefaults(database: DatabaseSync) {
     .run(PLAN_BACKFILL_KEY, new Date().toISOString());
 }
 
+const PLAN_PROVIDERS_KEY = "migration:plans-providers-v1";
+
+function migratePlanProvidersSqlite(database: DatabaseSync) {
+  const marker = database
+    .prepare("SELECT value FROM settings WHERE key = ?")
+    .get(PLAN_PROVIDERS_KEY) as { value: string } | undefined;
+  if (marker) return;
+
+  const update = database.prepare(
+    `UPDATE plans SET providers = ?
+     WHERE id = ? AND (providers IS NULL OR providers = '' OR providers = '[]')`
+  );
+  for (const plan of DEFAULT_PLANS) {
+    update.run(JSON.stringify(plan.providers), plan.id);
+  }
+
+  database
+    .prepare(
+      "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    )
+    .run(PLAN_PROVIDERS_KEY, new Date().toISOString());
+}
+
 const OMEGA_CAPABILITY_KEY = "migration:plans-omega-uncensored-v1";
 
-function migrateOmegaCapabilities(database: DatabaseSync) {
+function migrateOmegaCapabilitiesSqlite(database: DatabaseSync) {
   const marker = database
     .prepare("SELECT value FROM settings WHERE key = ?")
     .get(OMEGA_CAPABILITY_KEY) as { value: string } | undefined;
@@ -212,25 +334,12 @@ function migrateOmegaCapabilities(database: DatabaseSync) {
     | undefined;
 
   if (row) {
-    let capabilities: string[] = [];
-    try {
-      const parsed = JSON.parse(row.capabilities || "[]");
-      if (Array.isArray(parsed)) capabilities = parsed.map(String);
-    } catch {
-      capabilities = [];
-    }
-
+    const capabilities = parseJsonList(row.capabilities);
     if (!capabilities.includes("uncensored")) {
       capabilities.push("uncensored");
     }
 
-    let features: string[] = [];
-    try {
-      const parsed = JSON.parse(row.features || "[]");
-      if (Array.isArray(parsed)) features = parsed.map(String);
-    } catch {
-      features = [];
-    }
+    const features = parseJsonList(row.features);
     for (const feature of omega.features) {
       if (!features.includes(feature)) features.push(feature);
     }
@@ -249,30 +358,196 @@ function migrateOmegaCapabilities(database: DatabaseSync) {
     .run(OMEGA_CAPABILITY_KEY, new Date().toISOString());
 }
 
-const globalForDb = globalThis as unknown as {
-  __hackeraiDb?: DatabaseSync;
-};
+function parseJsonList(value: string | null | undefined) {
+  try {
+    const parsed = JSON.parse(value || "[]");
+    if (Array.isArray(parsed)) return parsed.map(String);
+  } catch {
+    return [];
+  }
+  return [];
+}
 
-export const db: DatabaseSync = globalForDb.__hackeraiDb ?? createDatabase();
+async function postgresColumnExists(table: string, column: string) {
+  const rows = await pgQuery(toPostgresSql(
+      "SELECT 1 AS present FROM information_schema.columns WHERE table_name = ? AND column_name = ? LIMIT 1"
+    ),
+    [table, column]
+  );
+  return rows.length > 0;
+}
 
-if (process.env.NODE_ENV !== "production") {
-  globalForDb.__hackeraiDb = db;
+async function initPostgres() {
+  for (const statement of SCHEMA_STATEMENTS) {
+    await pgQuery(statement);
+  }
+
+  const columns: Array<[string, string]> = [
+    ["history_days", "INTEGER NOT NULL DEFAULT 7"],
+    ["capabilities", "TEXT NOT NULL DEFAULT '[]'"],
+    ["category", "TEXT NOT NULL DEFAULT ''"],
+    ["providers", "TEXT NOT NULL DEFAULT '[]'"],
+  ];
+  for (const [column, definition] of columns) {
+    if (await postgresColumnExists("plans", column)) continue;
+    await pgQuery(`ALTER TABLE plans ADD COLUMN ${column} ${definition}`);
+  }
+
+  for (const plan of DEFAULT_PLANS) {
+    await pgQuery(toPostgresSql(
+        `INSERT INTO plans
+          (id, name, category, description, price, monthly_tokens, daily_messages, max_context, features, history_days, capabilities, providers, priority, is_default)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (id) DO NOTHING`
+      ),
+      [
+        plan.id,
+        plan.name,
+        plan.category,
+        plan.description,
+        plan.price,
+        plan.monthlyTokens,
+        plan.dailyMessages,
+        plan.maxContext,
+        JSON.stringify(plan.features),
+        plan.historyDays,
+        JSON.stringify(plan.capabilities),
+        JSON.stringify(plan.providers),
+        plan.priority,
+        plan.isDefault ? 1 : 0,
+      ]
+    );
+  }
+
+  const providersMarker = await pgQuery(
+    toPostgresSql("SELECT value FROM settings WHERE key = ?"),
+    [PLAN_PROVIDERS_KEY]
+  );
+  if (!providersMarker.length) {
+    for (const plan of DEFAULT_PLANS) {
+      await pgQuery(
+        toPostgresSql(
+          `UPDATE plans SET providers = ?
+           WHERE id = ? AND (providers IS NULL OR providers = '' OR providers = '[]')`
+        ),
+        [JSON.stringify(plan.providers), plan.id]
+      );
+    }
+    await pgQuery(
+      toPostgresSql(
+        "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value"
+      ),
+      [PLAN_PROVIDERS_KEY, new Date().toISOString()]
+    );
+  }
+
+  await postgres()
+    .query(
+      toPostgresSql(
+        "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value"
+      ),
+      [PLAN_BACKFILL_KEY, new Date().toISOString()]
+    )
+    .catch(() => undefined);
+
+  await postgres()
+    .query(
+      toPostgresSql(
+        "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value"
+      ),
+      [OMEGA_CAPABILITY_KEY, new Date().toISOString()]
+    )
+    .catch(() => undefined);
+}
+
+async function ensureReady() {
+  if (!USING_POSTGRES) return;
+  if (!globalForDb.__hackeraiInit) {
+    globalForDb.__hackeraiInit = initPostgres().catch((error) => {
+      globalForDb.__hackeraiInit = undefined;
+      throw error;
+    });
+  }
+  await globalForDb.__hackeraiInit;
 }
 
 export function nowIso() {
   return new Date().toISOString();
 }
 
-export function run(sql: string, params: Array<string | number | null> = []) {
-  return db.prepare(sql).run(...params);
+export type RunResult = {
+  changes: number;
+  lastInsertRowid: number;
+};
+
+export async function run(
+  sql: string,
+  params: SqlParam[] = []
+): Promise<RunResult> {
+  if (USING_POSTGRES) {
+    await ensureReady();
+    const rows = await pgQuery(withReturning(toPostgresSql(sql)),
+      normalizeParams(params)
+    );
+    return { changes: rows.length, lastInsertRowid: 0 };
+  }
+
+  const result = sqlite()
+    .prepare(sql)
+    .run(...(normalizeSqliteParams(params) as Array<string | number | null>));
+  return {
+    changes: Number(result.changes),
+    lastInsertRowid: Number(result.lastInsertRowid ?? 0),
+  };
 }
 
-export function get<T>(sql: string, params: Array<string | number | null> = []) {
-  return db.prepare(sql).get(...params) as T | undefined;
+export async function get<T>(
+  sql: string,
+  params: SqlParam[] = []
+): Promise<T | undefined> {
+  if (USING_POSTGRES) {
+    await ensureReady();
+    const rows = await pgQuery(toPostgresSql(sql),
+      normalizeParams(params)
+    );
+    return (rows[0] as T | undefined) ?? undefined;
+  }
+
+  return sqlite()
+    .prepare(sql)
+    .get(...(normalizeSqliteParams(params) as Array<string | number | null>)) as
+    | T
+    | undefined;
 }
 
-export function all<T>(sql: string, params: Array<string | number | null> = []) {
-  return db.prepare(sql).all(...params) as T[];
+export async function all<T>(
+  sql: string,
+  params: SqlParam[] = []
+): Promise<T[]> {
+  if (USING_POSTGRES) {
+    await ensureReady();
+    const rows = await pgQuery(toPostgresSql(sql),
+      normalizeParams(params)
+    );
+    return rows as T[];
+  }
+
+  return sqlite()
+    .prepare(sql)
+    .all(...(normalizeSqliteParams(params) as Array<string | number | null>)) as T[];
+}
+
+export async function exec(sql: string) {
+  if (USING_POSTGRES) {
+    await ensureReady();
+    for (const statement of sql.split(";")) {
+      const trimmed = statement.trim();
+      if (!trimmed) continue;
+      await pgQuery(trimmed);
+    }
+    return;
+  }
+  sqlite().exec(sql);
 }
 
 export type UserRow = {
@@ -303,6 +578,7 @@ export type PlanRow = {
   features: string;
   history_days: number;
   capabilities: string;
+  providers: string;
   priority: number;
   is_default: number;
 };

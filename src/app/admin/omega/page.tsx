@@ -42,6 +42,7 @@ export default function AdminOmegaPage() {
   const [quantization, setQuantization] = useState("");
   const [command, setCommand] = useState("");
   const [message, setMessage] = useState("");
+  const [setupLoading, setSetupLoading] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -84,6 +85,28 @@ export default function AdminOmegaPage() {
     const data = await response.json();
     setMessage(data.message ?? (data.ok ? "Job iniciado." : "Falha ao iniciar."));
     await load();
+  }
+
+  async function setupRepo() {
+    setMessage("");
+    setSetupLoading(true);
+    try {
+      const response = await fetch("/api/admin/omega", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "setup", model, quantization }),
+      });
+      const data = await response.json();
+      const hint = data.hint ? ` (${data.hint})` : "";
+      setMessage(
+        (data.message ?? (data.ok ? "Repo baixado com sucesso." : "Falha ao baixar o repo.")) + hint
+      );
+      await load();
+    } catch {
+      setMessage("Falha ao baixar o repo heretic.");
+    } finally {
+      setSetupLoading(false);
+    }
   }
 
   async function copy(text: string) {
@@ -140,6 +163,14 @@ export default function AdminOmegaPage() {
             onClick={() => copy(status?.repo.setupCommand ?? "")}
           >
             copiar
+          </button>
+          <button
+            type="button"
+            className="btn btn-xs btn-primary"
+            onClick={setupRepo}
+            disabled={setupLoading || status?.repo.present}
+          >
+            {setupLoading ? "baixando e iniciando..." : "baixar tudo e iniciar"}
           </button>
           {!status?.repo.present ? (
             <span className="text-amber text-[12px]">

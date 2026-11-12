@@ -46,6 +46,10 @@ export function OtpLogin() {
         setInfo(
           "SMTP nao configurado: o codigo de teste aparece abaixo (modo dev)."
         );
+      } else if (data.deliveryFallback) {
+        setInfo(
+          "Sem SMTP configurado: o codigo foi gerado e registrado nos logs do servidor. Consulte os logs (Vercel > Logs) e informe o codigo abaixo."
+        );
       } else {
         setInfo(
           "Codigo enviado para o seu e-mail. Confira a caixa de entrada e a pasta de spam."

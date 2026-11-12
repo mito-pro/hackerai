@@ -1,12 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+type ProviderStatus = { configured: boolean; masked: string };
+
+type PlanSummary = { id: string; name: string; providers?: string[] };
 
 type Settings = {
   providers: {
-    groq: { configured: boolean; masked: string };
-    google: { configured: boolean; masked: string };
-    openrouter: { configured: boolean; masked: string };
+    groq: ProviderStatus;
+    google: ProviderStatus;
+    openrouter: ProviderStatus;
+    cerebras: ProviderStatus;
+    sambanova: ProviderStatus;
+    nvidia: ProviderStatus;
+    opencode: ProviderStatus;
+    vercel: ProviderStatus;
     ollama: { configured: boolean; baseUrl: string; model: string };
   };
   otp: {
@@ -22,10 +31,16 @@ type Settings = {
 
 export default function AdminProvidersPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [plans, setPlans] = useState<PlanSummary[]>([]);
   const [form, setForm] = useState({
     groq: "",
     google: "",
     openrouter: "",
+    cerebras: "",
+    sambanova: "",
+    nvidia: "",
+    opencode: "",
+    vercel: "",
     ollamaBaseUrl: "",
     ollamaModel: "",
     smtpHost: "",
@@ -37,6 +52,7 @@ export default function AdminProvidersPage() {
     appHost: "",
   });
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
   const [tests, setTests] = useState<Record<string, string>>({});
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [testEmail, setTestEmail] = useState("");
@@ -61,8 +77,35 @@ export default function AdminProvidersPage() {
           appHost: data.otp.appHost,
         }));
       })
-      .catch(() => setMessage("Falha ao carregar as configuracoes."));
+      .catch(() => setError("Falha ao carregar as configuracoes."));
+
+    fetch("/api/admin/plans", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return await response.json();
+      })
+      .then((data: { plans?: PlanSummary[] } | null) => {
+        setPlans(data?.plans ?? []);
+      })
+      .catch(() => undefined);
   }, []);
+
+  const plansByProvider = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const plan of plans) {
+      for (const provider of plan.providers ?? []) {
+        if (provider === "local") continue;
+        const current = map.get(provider) ?? [];
+        current.push(plan.name);
+        map.set(provider, current);
+      }
+    }
+    return map;
+  }, [plans]);
+
+  function plansForProvider(provider: string) {
+    return plansByProvider.get(provider) ?? [];
+  }
 
   async function save(event: React.FormEvent) {
     event.preventDefault();
@@ -74,15 +117,21 @@ export default function AdminProvidersPage() {
     });
     const data = await response.json();
     if (!response.ok) {
-      setMessage(data.message ?? "Falha ao salvar.");
+      setError(data.message ?? "Falha ao salvar.");
       return;
     }
+    setError("");
     setMessage("configuracoes salvas.");
     setForm((current) => ({
       ...current,
       groq: "",
       google: "",
       openrouter: "",
+      cerebras: "",
+      sambanova: "",
+      nvidia: "",
+      opencode: "",
+      vercel: "",
       smtpPass: "",
     }));
     const refreshed = await fetch("/api/admin/settings", { cache: "no-store" });
@@ -108,7 +157,17 @@ export default function AdminProvidersPage() {
     }));
   }
 
-  async function clearKey(provider: "groq" | "google" | "openrouter") {
+  async function clearKey(
+    provider:
+      | "groq"
+      | "google"
+      | "openrouter"
+      | "cerebras"
+      | "sambanova"
+      | "nvidia"
+      | "opencode"
+      | "vercel"
+  ) {
     setMessage("");
     const response = await fetch("/api/admin/settings", {
       method: "PUT",
@@ -127,25 +186,52 @@ export default function AdminProvidersPage() {
 
   return (
     <div className="space-y-5">
-      <header>
+      <header className="panel p-5">
         <h1 className="text-neon text-xl tracking-[0.2em] uppercase">
           [ provedores ]
         </h1>
-        <p className="text-muted text-[12.5px]">
+        <p className="text-muted mt-1 text-[12.5px]">
           Chaves de APIs gratuitas e senha do SMTP. Armazenadas com AES-256-GCM
           no banco (as variaveis de ambiente tambem sao lidas como fallback).
         </p>
+        <p className="text-muted mt-2 text-[11.5px]">
+          Cada plano usa apenas os provedores liberados em{" "}
+          <span className="text-neon">{"Admin > Planos"}</span>. Sem chave, o
+          provedor fica marcado e o plano usa o NEXUS Core local.
+        </p>
       </header>
 
-      {message ? <p className="text-neon text-[12.5px]">{message}</p> : null}
+      {message ? (
+        <p className="panel border-neon/40 p-3 text-neon text-[12.5px]">
+          {message}
+        </p>
+      ) : null}
+      {error ? (
+        <p className="panel border-danger/40 p-3 text-danger text-[12.5px]">
+          {error}
+        </p>
+      ) : null}
 
       <form onSubmit={save} className="grid gap-4 lg:grid-cols-2">
         <section className="panel space-y-3 p-5">
-          <h2 className="text-neon text-sm tracking-[0.18em] uppercase">
-            groq :: free tier
-          </h2>
+          <div className="flex items-start justify-between gap-2">
+            <h2 className="text-neon text-sm tracking-[0.18em] uppercase">
+              groq :: free tier
+            </h2>
+            <span
+              className={`badge ${
+                settings?.providers.groq.configured ? "badge-neon" : "badge-danger"
+              }`}
+            >
+              {settings?.providers.groq.configured ? "chave ativa" : "sem chave"}
+            </span>
+          </div>
           <p className="text-muted text-[12px]">
             console.groq.com/keys :: Llama 3.3 70B e 3.1 8B
+          </p>
+          <p className="text-muted text-[11.5px]">
+            planos que usam este provedor:{" "}
+            {plansForProvider("groq").join(", ") || "nenhum"}
           </p>
           <div>
             <label className="label">api key</label>
@@ -184,9 +270,22 @@ export default function AdminProvidersPage() {
         </section>
 
         <section className="panel space-y-3 p-5">
-          <h2 className="text-neon text-sm tracking-[0.18em] uppercase">
-            google ai studio :: free tier
-          </h2>
+          <div className="flex items-start justify-between gap-2">
+            <h2 className="text-neon text-sm tracking-[0.18em] uppercase">
+              google ai studio :: free tier
+            </h2>
+            <span
+              className={`badge ${
+                settings?.providers.google.configured
+                  ? "badge-neon"
+                  : "badge-danger"
+              }`}
+            >
+              {settings?.providers.google.configured
+                ? "chave ativa"
+                : "sem chave"}
+            </span>
+          </div>
           <p className="text-muted text-[12px]">
             aistudio.google.com :: Gemini 2.0 Flash
           </p>
@@ -227,11 +326,28 @@ export default function AdminProvidersPage() {
         </section>
 
         <section className="panel space-y-3 p-5">
-          <h2 className="text-neon text-sm tracking-[0.18em] uppercase">
-            openrouter :: modelos free
-          </h2>
+          <div className="flex items-start justify-between gap-2">
+            <h2 className="text-neon text-sm tracking-[0.18em] uppercase">
+              openrouter :: modelos free
+            </h2>
+            <span
+              className={`badge ${
+                settings?.providers.openrouter.configured
+                  ? "badge-neon"
+                  : "badge-danger"
+              }`}
+            >
+              {settings?.providers.openrouter.configured
+                ? "chave ativa"
+                : "sem chave"}
+            </span>
+          </div>
           <p className="text-muted text-[12px]">
             openrouter.ai/keys :: sufixo :free
+          </p>
+          <p className="text-muted text-[11.5px]">
+            planos que usam este provedor:{" "}
+            {plansForProvider("openrouter").join(", ") || "nenhum"}
           </p>
           <div>
             <label className="label">api key</label>
@@ -268,6 +384,71 @@ export default function AdminProvidersPage() {
             <p className="text-muted text-[12px]">{tests.openrouter}</p>
           ) : null}
         </section>
+
+        <CompatibleProviderCard
+          title="Cerebras :: free tier"
+          hint="cloud.cerebras.ai :: Llama 3.3 70B e Qwen3 32B"
+          plans={plansForProvider("cerebras")}
+          value={form.cerebras}
+          configured={settings?.providers.cerebras.configured ?? false}
+          masked={settings?.providers.cerebras.masked ?? ""}
+          testResult={tests.cerebras}
+          onChange={(value) => setForm({ ...form, cerebras: value })}
+          onTest={() => test("cerebras")}
+          onClear={() => clearKey("cerebras")}
+        />
+
+        <CompatibleProviderCard
+          title="SambaNova :: free tier"
+          hint="sambanova.ai :: developer tier :: Llama e Qwen"
+          plans={plansForProvider("sambanova")}
+          value={form.sambanova}
+          configured={settings?.providers.sambanova.configured ?? false}
+          masked={settings?.providers.sambanova.masked ?? ""}
+          testResult={tests.sambanova}
+          onChange={(value) => setForm({ ...form, sambanova: value })}
+          onTest={() => test("sambanova")}
+          onClear={() => clearKey("sambanova")}
+        />
+
+        <CompatibleProviderCard
+          title="NVIDIA NIM :: creditos gratis"
+          hint="build.nvidia.com :: Nemotron, Llama e Qwen"
+          plans={plansForProvider("nvidia")}
+          value={form.nvidia}
+          configured={settings?.providers.nvidia.configured ?? false}
+          masked={settings?.providers.nvidia.masked ?? ""}
+          testResult={tests.nvidia}
+          onChange={(value) => setForm({ ...form, nvidia: value })}
+          onTest={() => test("nvidia")}
+          onClear={() => clearKey("nvidia")}
+        />
+
+        <CompatibleProviderCard
+          title="OpenCode Console :: free tier"
+          hint="opencode.ai/console :: modelos gratuitos (big-pickle, GLM, DeepSeek)"
+          plans={plansForProvider("opencode")}
+          value={form.opencode}
+          configured={settings?.providers.opencode.configured ?? false}
+          masked={settings?.providers.opencode.masked ?? ""}
+          testResult={tests.opencode}
+          onChange={(value) => setForm({ ...form, opencode: value })}
+          onTest={() => test("opencode")}
+          onClear={() => clearKey("opencode")}
+        />
+
+        <CompatibleProviderCard
+          title="Vercel AI Gateway :: modelos premium"
+          hint="ai-gateway.vercel.sh :: Claude, GPT, Gemini, Grok e Kimi"
+          plans={plansForProvider("vercel")}
+          value={form.vercel}
+          configured={settings?.providers.vercel.configured ?? false}
+          masked={settings?.providers.vercel.masked ?? ""}
+          testResult={tests.vercel}
+          onChange={(value) => setForm({ ...form, vercel: value })}
+          onTest={() => test("vercel")}
+          onClear={() => clearKey("vercel")}
+        />
 
         <section className="panel space-y-3 p-5">
           <h2 className="text-neon text-sm tracking-[0.18em] uppercase">
@@ -429,5 +610,73 @@ export default function AdminProvidersPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+function CompatibleProviderCard({
+  title,
+  hint,
+  plans,
+  value,
+  configured,
+  masked,
+  testResult,
+  onChange,
+  onTest,
+  onClear,
+}: {
+  title: string;
+  hint: string;
+  plans?: string[];
+  value: string;
+  configured: boolean;
+  masked: string;
+  testResult?: string;
+  onChange: (value: string) => void;
+  onTest: () => void;
+  onClear: () => void;
+}) {
+  return (
+    <section className="panel space-y-3 p-5">
+      <div className="flex items-start justify-between gap-2">
+        <h2 className="text-neon text-sm tracking-[0.18em] uppercase">{title}</h2>
+        <span className={`badge ${configured ? "badge-neon" : "badge-danger"}`}>
+          {configured ? "chave ativa" : "sem chave"}
+        </span>
+      </div>
+      <p className="text-muted text-[12px]">{hint}</p>
+      {plans?.length ? (
+        <p className="text-muted text-[11.5px]">
+          planos que usam este provedor:{" "}
+          <span className="text-neon/80">{plans.join(", ")}</span>
+        </p>
+      ) : (
+        <p className="text-muted text-[11.5px]">
+          nenhum plano usa este provedor no momento
+        </p>
+      )}
+      <div>
+        <label className="label">api key</label>
+        <input
+          className="input"
+          type="password"
+          placeholder={configured ? `ativa (${masked})` : "cole a chave aqui"}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      </div>
+      <button type="button" className="btn btn-xs" onClick={onTest}>
+        testar conexao
+      </button>
+      <button
+        type="button"
+        className="btn btn-xs btn-danger"
+        onClick={onClear}
+        disabled={!configured}
+      >
+        remover chave
+      </button>
+      {testResult ? <p className="text-muted text-[12px]">{testResult}</p> : null}
+    </section>
   );
 }

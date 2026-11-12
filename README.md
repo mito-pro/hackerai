@@ -73,6 +73,8 @@ Todas opcionais, exceto `APP_SECRET` em producao.
 | `GROQ_API_KEY` | vazio | Fallback de ambiente para a chave da Groq. |
 | `GOOGLE_API_KEY` | vazio | Fallback de ambiente para o Google AI Studio. |
 | `OPENROUTER_API_KEY` | vazio | Fallback de ambiente para o OpenRouter. |
+| `OPENCODE_API_KEY` | vazio | Fallback de ambiente para o OpenCode Console (modelos gratuitos). |
+| `VERCEL_AI_GATEWAY_API_KEY` | vazio | Fallback de ambiente para o Vercel AI Gateway (modelos premium). |
 | `OLLAMA_BASE_URL` | `http://127.0.0.1:11434/v1` | Base URL da API do Ollama. Definir a variavel **habilita** o provedor. |
 | `OLLAMA_MODEL` | `llama3.2` | Modelo padrao do Ollama. |
 | `HERETIC_REPO_PATH` | `./tools/Uncensored-AI` | Caminho do repo do Heretic usado no console OMEGA. |
@@ -96,14 +98,22 @@ variaveis de ambiente e sao gravadas criptografadas (AES-256-GCM) no SQLite.
 4. **O primeiro usuario registrado vira administrador.** Os e-mails listados em
    `ADMIN_EMAILS` tambem entram como admin.
 
-## Conectando provedores (todas as opcoes tem cota gratuita)
+## Conectando provedores
 
-| Provedor | Onde pegou a chave | Modelos |
-| --- | --- | --- |
-| Groq | `console.groq.com/keys` | Llama 3.3 70B, Llama 3.1 8B |
-| Google AI Studio | `aistudio.google.com` | Gemini 2.0 Flash |
-| OpenRouter | `openrouter.ai/keys` | DeepSeek e Llama 3.3 (`:free`) |
-| Ollama | `ollama serve` (local) | o que estiver instalado na sua maquina |
+| Provedor | Onde pegou a chave | Modelos | Planos |
+| --- | --- | --- | --- |
+| OpenCode Console | `opencode.ai/console` | Big Pickle, GLM 5.3 Flash, DeepSeek V4.1 Flash, MiMo V2.6 Flash, MiniMax M3.1 Flash, Nemotron 3.5, Inkling, Beam, LongCat, Iceman, Flint | FREE, OMEGA |
+| Groq | `console.groq.com/keys` | Llama 3.3 70B, Llama 3.1 8B, Llama 4, Kimi K2, Qwen3, DeepSeek R1, Gemma 2, GPT OSS | PRO, OMEGA |
+| NVIDIA NIM | `build.nvidia.com` | Nemotron 3 Ultra/Super, Nemotron 3.5, Llama Nemotron, VILA, NEVA | ULTRA, OMEGA |
+| OpenRouter | `openrouter.ai/keys` | DeepSeek e Llama 3.3 (`:free`) + roteadores | FREE, OMEGA |
+| SambaNova | `sambanova.ai` | GLM 5.3, Llama 3.3 70B, MiniMax M3.1 Flash, Gemma 4 | OMEGA |
+| Vercel AI Gateway | painel da Vercel (chave `vck_`) | Claude 5.5, GPT 5.5, Gemini 3.8, Grok 4.7, Kimi K3.1, GLM 5.3, DeepSeek V4 | OMEGA |
+| Google AI Studio | `aistudio.google.com` | Gemini 2.0 Flash | admin |
+| Ollama | `ollama serve` (local) | o que estiver instalado na sua maquina | admin, OMEGA |
+
+O Vercel AI Gateway exige cartao de credito cadastrado na conta Vercel: sem ele
+a listagem de modelos funciona, mas o chat responde HTTP 403
+(`customer_verification_required`).
 
 No painel: **Admin > Provedores** -> cole a chave -> *testar conexao* ->
 *salvar configuracoes*. O botão de teste do Ollama lista os modelos instalados

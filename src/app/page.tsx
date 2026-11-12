@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { formatCurrency, formatNumber, readJsonSafe } from "@/lib/utils";
 import type { Plan } from "@/lib/plans";
+import { planLabel } from "@/lib/model-registry";
 
 const BENEFITS = [
   {
@@ -94,17 +95,17 @@ export default function Home() {
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-20 border-b border-line bg-ink/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5 sm:px-5 sm:py-3">
           <Link href="/" className="flex items-center gap-2">
             <Image
               src="/emblem-hackerai.png"
               alt="HACKER AI"
-              width={36}
-              height={36}
-              className="size-9 rounded-md"
+              width={32}
+              height={32}
+              className="size-8 rounded-md"
               priority
             />
-            <span className="text-sm font-semibold tracking-[0.3em] text-neon">
+            <span className="text-xs font-semibold tracking-[0.3em] text-neon sm:text-sm">
               HACKER<span className="text-text">_AI</span>
             </span>
             <span className="badge badge-muted hidden sm:inline-flex">NEXUS</span>
@@ -123,7 +124,7 @@ export default function Home() {
                   Terminal
                 </Link>
                 {user.role === "admin" ? (
-                  <Link href="/admin/" className="btn btn-xs">
+                  <Link href="/admin/" className="btn btn-xs hidden sm:inline-flex">
                     Admin
                   </Link>
                 ) : null}
@@ -137,21 +138,21 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-5">
-        <section className="grid gap-10 py-16 md:grid-cols-[1.1fr_0.9fr] md:items-center md:py-24">
-          <div>
-            <p className="badge badge-neon mb-5">
+      <main className="mx-auto max-w-6xl px-4 sm:px-5">
+        <section className="grid gap-8 py-12 sm:gap-10 sm:py-16 md:grid-cols-[1.1fr_0.9fr] md:items-center md:py-24">
+          <div className="space-y-5">
+            <p className="badge badge-neon mb-4">
               v1.0 :: plataforma de inteligencia artificial
             </p>
-            <h1 className="text-4xl leading-tight font-semibold md:text-5xl">
+            <h1 className="text-4xl leading-tight font-semibold sm:text-5xl">
               <span className="neon">HACKER_AI</span>
               <br />
               <span className="text-text">NEXUS</span>
             </h1>
-            <p className="text-neon mt-4 text-xs tracking-[0.2em] uppercase md:text-sm">
+            <p className="text-neon mt-3 text-[11px] tracking-[0.2em] uppercase sm:text-sm sm:mt-4">
               Inteligencia artificial. Produtividade. Controle.
             </p>
-            <p className="text-muted mt-5 max-w-xl text-sm md:text-base">
+            <p className="text-muted mt-4 max-w-none text-sm sm:text-base">
               O HACKER_AI NEXUS e uma plataforma inteligente de conversacao
               idealizada e desenvolvida por{" "}
               <span className="text-neon">Mistico Virus</span>, criada para
@@ -162,7 +163,7 @@ export default function Home() {
               ambiente digital.
             </p>
 
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="mt-6 flex flex-wrap gap-3 sm:mt-8">
               <Link href={user ? "/chat/" : "/login/"} className="btn btn-primary">
                 {user ? "Abrir terminal" : "Entrar com OTP"}
               </Link>
@@ -171,15 +172,15 @@ export default function Home() {
               </a>
             </div>
 
-            <dl className="mt-10 grid grid-cols-3 gap-3">
+            <dl className="mt-8 grid grid-cols-3 gap-3 sm:mt-10">
               {[
                 { k: "5", v: "provedores" },
                 { k: "3", v: "planos" },
                 { k: "100%", v: "self-hosted" },
               ].map((item) => (
-                <div key={item.v} className="panel-flat px-3 py-2">
-                  <dt className="text-neon text-lg font-semibold">{item.k}</dt>
-                  <dd className="text-muted text-[11px] tracking-[0.14em] uppercase">
+                <div key={item.v} className="panel-flat px-3 py-2 sm:px-4 sm:py-2.5">
+                  <dt className="text-neon text-lg font-semibold sm:text-xl">{item.k}</dt>
+                  <dd className="text-muted text-[11px] tracking-[0.14em] uppercase sm:text-[12px]">
                     {item.v}
                   </dd>
                 </div>
@@ -188,21 +189,21 @@ export default function Home() {
           </div>
 
           <div className="panel glow-box overflow-hidden">
-            <div className="flex items-center gap-2 border-b border-line px-4 py-2">
+            <div className="flex items-center gap-2 border-b border-line px-4 py-2 sm:px-4 sm:py-2.5">
               <span className="size-2 rounded-full bg-danger" />
               <span className="size-2 rounded-full bg-amber" />
               <span className="size-2 rounded-full bg-neon" />
-              <span className="text-muted ml-2 text-[11px] tracking-[0.2em]">
+              <span className="text-muted ml-2 text-[11px] tracking-[0.2em] sm:text-[12px]">
                 nexus@shell:~
               </span>
             </div>
-            <pre className="overflow-x-auto p-4 text-[12.5px] leading-relaxed">
+            <pre className="overflow-x-auto p-4 sm:p-5 text-[12px] leading-relaxed sm:text-[12.5px]">
               <code>
                 {`$ npx hacker-ai --start
 [ok] banco local ........ sqlite (data/hackerai.db)
 [ok] sessao ............. httpOnly + hash sha-256
 [ok] otp ................ 6 digitos / 10 min
-[ok] provedores ......... groq, google, openrouter, ollama
+[ok] provedores ......... groq, google, openrouter, ollama, runapi
 [ok] motor local ........ nexus-core offline
 
 > conectando ao nucleo...
@@ -213,13 +214,13 @@ export default function Home() {
           </div>
         </section>
 
-        <section id="beneficios" className="scroll-mt-20 py-10">
+        <section id="beneficios" className="scroll-mt-20 py-8 sm:py-10">
           <h2 className="text-neon text-xl tracking-[0.2em] uppercase">
             [ principais beneficios ]
           </h2>
-          <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {BENEFITS.map((benefit) => (
-              <article key={benefit.title} className="panel p-5">
+              <article key={benefit.title} className="panel p-5 sm:p-6">
                 <h3 className="text-neon text-sm tracking-[0.12em] uppercase">
                   {benefit.title}
                 </h3>
@@ -229,8 +230,8 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="py-14">
-          <div className="panel p-6 md:p-8">
+        <section className="py-10 sm:py-14">
+          <div className="panel p-6 sm:p-8">
             <h2 className="text-neon text-xl tracking-[0.2em] uppercase">
               [ sobre o projeto ]
             </h2>
@@ -264,6 +265,18 @@ export default function Home() {
 
               <div>
                 <h3 className="text-neon text-sm tracking-[0.12em] uppercase">
+                  Modulos: texto, imagem, audio, video e arquivos
+                </h3>
+                <p className="text-muted mt-2 text-[13px]">
+                  Gere imagens com GPT Image 2 e Nano Banana via RunAPI, crie
+                  videos com Kling (texto/imagem para video), transforme texto
+                  em audio e anexe arquivos. Armazenamento opcional em Cloudflare
+                  R2. Tudo acessivel pelo terminal com um unico toque.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-neon text-sm tracking-[0.12em] uppercase">
                   Uma nova forma de trabalhar com IA
                 </h3>
                 <p className="text-muted mt-2 text-[13px]">
@@ -282,13 +295,13 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="py-14">
+        <section className="py-10 sm:py-14">
           <h2 className="text-neon text-xl tracking-[0.2em] uppercase">
             [ como funciona ]
           </h2>
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {STEPS.map((step) => (
-              <div key={step.n} className="panel-flat p-5">
+              <div key={step.n} className="panel-flat p-5 sm:p-6">
                 <span className="text-neon text-2xl font-semibold">{step.n}</span>
                 <h3 className="mt-2 text-sm tracking-[0.12em] uppercase">
                   {step.title}
@@ -299,15 +312,15 @@ export default function Home() {
           </div>
         </section>
 
-        <section id="planos" className="scroll-mt-20 py-10">
+        <section id="planos" className="scroll-mt-20 py-8 sm:py-10">
           <h2 className="text-neon text-xl tracking-[0.2em] uppercase">
             [ planos ]
           </h2>
-          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {plans.map((plan) => (
               <div
                 key={plan.id}
-                className={`panel flex flex-col p-6 ${
+                className={`panel flex flex-col p-6 sm:p-8 ${
                   plan.id === "pro" || plan.id === "nexus-omega"
                     ? "glow-box"
                     : ""
@@ -344,6 +357,10 @@ export default function Home() {
                     <span className="text-neon">-</span> contexto{" "}
                     {formatNumber(plan.maxContext)} tokens
                   </li>
+                  <li>
+                    <span className="text-neon">-</span> modelos de IA:{" "}
+                    {planLabel(plan.id, plan.providers)}
+                  </li>
                   {plan.features.map((feature) => (
                     <li key={feature}>
                       <span className="text-neon">-</span> {feature}
@@ -352,7 +369,7 @@ export default function Home() {
                 </ul>
                 <Link
                   href="/login/"
-                  className={`btn mt-5 ${
+                  className={`btn mt-5 sm:mt-6 ${
                     plan.id === "pro" || plan.id === "nexus-omega"
                       ? "btn-primary"
                       : ""
@@ -370,8 +387,8 @@ export default function Home() {
           </p>
         </section>
 
-        <section className="py-14">
-          <div className="panel p-6">
+        <section className="py-10 sm:py-14">
+          <div className="panel p-6 sm:p-8">
             <h2 className="text-neon text-xl tracking-[0.2em] uppercase">
               [ apis gratuitas ]
             </h2>
@@ -402,8 +419,13 @@ export default function Home() {
                   models: "modelo local do PC",
                   where: "ollama.com/download",
                 },
+                {
+                  name: "RunAPI",
+                  models: "Kling video, GPT Image 2, Nano Banana",
+                  where: "runapi.ai",
+                },
               ].map((provider) => (
-                <div key={provider.name} className="panel-flat p-4">
+                <div key={provider.name} className="panel-flat p-4 sm:p-5">
                   <p className="text-neon text-sm tracking-[0.12em] uppercase">
                     {provider.name}
                   </p>

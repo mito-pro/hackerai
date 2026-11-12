@@ -25,18 +25,49 @@ export default function AdminUsersPage() {
   const [plans, setPlans] = useState<PlanOption[]>([]);
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
   const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [showCreate, setShowCreate] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [createForm, setCreateForm] = useState({
+    email: "",
+    name: "",
+    planId: "free",
+    role: "user" as "user" | "admin",
+  });
+  const [createLoading, setCreateLoading] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState("");
+
+  useEffect(() => {
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { user?: { id?: string } } | null) => {
+        if (data?.user?.id) setCurrentUserId(data.user.id);
+      })
+      .catch(() => undefined);
+  }, []);
 
   const load = useCallback(async () => {
-    const response = await fetch("/api/admin/users", { cache: "no-store" });
-    if (!response.ok) return;
-    const data = await readJsonSafe<{
-      users?: AdminUser[];
-      plans?: PlanOption[];
-    }>(response);
-    if (!data) return;
-    setUsers(data.users ?? []);
-    setPlans(data.plans ?? []);
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/admin/users", { cache: "no-store" });
+      const data = await readJsonSafe<{
+        users?: AdminUser[];
+        plans?: PlanOption[];
+        message?: string;
+      }>(response);
+      if (!response.ok) {
+        setError(data?.message ?? `Falha ao carregar usuarios (HTTP ${response.status}).`);
+        return;
+      }
+      setUsers(data?.users ?? []);
+      setPlans(data?.plans ?? []);
+    } catch {
+      setError("Falha de rede ao carregar usuarios.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -49,24 +80,89 @@ export default function AdminUsersPage() {
     return users.filter(
       (user) =>
         user.email.toLowerCase().includes(term) ||
-        user.name.toLowerCase().includes(term)
+        user.name.toLowerCase().includes(term) ||
+        user.planId.toLowerCase().includes(term) ||
+        user.role.toLowerCase().includes(term)
     );
   }, [users, search]);
 
+  const planName = useCallback(
+    (planId: string) =>
+      plans.find((plan) => plan.id === planId)?.name ?? planId ?? "free",
+    [plans]
+  );
+
   async function patch(id: string, action: string, value?: string | number | null) {
     setMessage("");
-    const response = await fetch("/api/admin/users", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, action, value }),
-    });
-    const data = await readJsonSafe<{ message?: string }>(response);
-    if (!response.ok) {
-      setMessage(data?.message ?? "Falha na operacao.");
-      return;
+    setError("");
+    try {
+      const response = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, action, value }),
+      });
+      const data = await readJsonSafe<{ message?: string }>(response);
+      if (!response.ok) {
+        setError(data?.message ?? "Falha na operacao.");
+        return;
+      }
+      setMessage("operacao aplicada.");
+      await load();
+    } catch {
+      setError("Falha de rede na operacao.");
     }
-    setMessage("operacao aplicada.");
-    await load();
+  }
+
+  async function removeUser(id: string, email: string) {
+    const confirmed = window.confirm(
+      `Apagar o usuario ${email}?\n\nIsso remove o login, os chats, as mensagens, o uso e as sessoes dele. Nao da para desfazer.`
+    );
+    if (!confirmed) return;
+    setMessage("");
+    setError("");
+    try {
+      const response = await fetch("/api/admin/users", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const data = await readJsonSafe<{ message?: string }>(response);
+      if (!response.ok) {
+        setError(data?.message ?? "Falha ao apagar o usuario.");
+        return;
+      }
+      setMessage(`usuario apagado: ${email}`);
+      await load();
+    } catch {
+      setError("Falha de rede ao apagar o usuario.");
+    }
+  }
+
+  async function createAccount(event: React.FormEvent) {
+    event.preventDefault();
+    setMessage("");
+    setError("");
+    setCreateLoading(true);
+    try {
+      const response = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(createForm),
+      });
+      const data = await readJsonSafe<{ message?: string }>(response);
+      if (!response.ok) {
+        setError(data?.message ?? "Falha ao criar conta.");
+        return;
+      }
+      setMessage(`conta criada: ${createForm.email}`);
+      setCreateForm({ email: "", name: "", planId: "free", role: "user" });
+      setShowCreate(false);
+      await load();
+    } catch {
+      setError("Falha de rede ao criar conta.");
+    } finally {
+      setCreateLoading(false);
+    }
   }
 
   return (
@@ -77,18 +173,111 @@ export default function AdminUsersPage() {
             [ usuarios ]
           </h1>
           <p className="text-muted text-[12.5px]">
-            {users.length} operador(es) registrado(s).
+            {loading
+              ? "carregando operadores..."
+              : `${users.length} operador(es) registrado(s) no banco de dados.`}
           </p>
         </div>
-        <input
-          className="input w-full max-w-xs"
-          placeholder="buscar por e-mail ou nome..."
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            className="input w-full max-w-xs"
+            placeholder="buscar por e-mail, nome ou plano..."
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          <button
+            type="button"
+            className="btn btn-xs shrink-0"
+            onClick={() => load()}
+            disabled={loading}
+          >
+            {loading ? "carregando" : "recarregar"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-xs btn-primary shrink-0"
+            onClick={() => setShowCreate((v) => !v)}
+          >
+            {showCreate ? "fechar" : "+ criar conta teste"}
+          </button>
+        </div>
       </header>
 
       {message ? <p className="text-neon text-[12.5px]">{message}</p> : null}
+      {error ? <p className="text-danger text-[12.5px]">{error}</p> : null}
+
+      {showCreate ? (
+        <form
+          onSubmit={createAccount}
+          className="panel grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4"
+        >
+          <div>
+            <label className="label">e-mail</label>
+            <input
+              className="input"
+              type="email"
+              required
+              placeholder="teste@dominio.com"
+              value={createForm.email}
+              onChange={(event) =>
+                setCreateForm({ ...createForm, email: event.target.value })
+              }
+            />
+          </div>
+          <div>
+            <label className="label">nome</label>
+            <input
+              className="input"
+              placeholder="Operador Teste"
+              value={createForm.name}
+              onChange={(event) =>
+                setCreateForm({ ...createForm, name: event.target.value })
+              }
+            />
+          </div>
+          <div>
+            <label className="label">plano</label>
+            <select
+              className="input"
+              value={createForm.planId}
+              onChange={(event) =>
+                setCreateForm({ ...createForm, planId: event.target.value })
+              }
+            >
+              {plans.map((plan) => (
+                <option key={plan.id} value={plan.id}>
+                  {plan.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label">papel</label>
+            <select
+              className="input"
+              value={createForm.role}
+              onChange={(event) =>
+                setCreateForm({
+                  ...createForm,
+                  role: event.target.value as "user" | "admin",
+                })
+              }
+            >
+              <option value="user">user</option>
+              <option value="admin">admin</option>
+            </select>
+          </div>
+          <div className="sm:col-span-2 lg:col-span-4">
+            <button
+              type="submit"
+              disabled={createLoading}
+              className="btn btn-primary"
+            >
+              {createLoading ? "criando..." : "criar conta"}
+            </button>
+          </div>
+        </form>
+      ) : null}
 
       <div className="panel overflow-x-auto p-4">
         <table>
@@ -108,10 +297,16 @@ export default function AdminUsersPage() {
             {filtered.map((user) => (
               <tr key={user.id}>
                 <td>
-                  <p className="text-neon">{user.email}</p>
+                  <p className="text-neon break-all">{user.email}</p>
                   <p className="text-muted text-[11.5px]">
-                    {user.name} :: {formatDateTime(user.createdAt)}
+                    {user.name || "sem nome"} ::{" "}
+                    {formatDateTime(user.createdAt)}
                   </p>
+                  {user.lastLoginAt ? (
+                    <p className="text-muted text-[11px]">
+                      ultimo acesso: {formatDateTime(user.lastLoginAt)}
+                    </p>
+                  ) : null}
                 </td>
                 <td>
                   <button
@@ -120,7 +315,11 @@ export default function AdminUsersPage() {
                       user.role === "admin" ? "badge-amber" : "badge-muted"
                     }`}
                     onClick={() =>
-                      patch(user.id, "set_role", user.role === "admin" ? "user" : "admin")
+                      patch(
+                        user.id,
+                        "set_role",
+                        user.role === "admin" ? "user" : "admin"
+                      )
                     }
                   >
                     {user.role}
@@ -130,7 +329,9 @@ export default function AdminUsersPage() {
                   <select
                     className="input w-auto py-1 text-[12px]"
                     value={user.planId}
-                    onChange={(event) => patch(user.id, "set_plan", event.target.value)}
+                    onChange={(event) =>
+                      patch(user.id, "set_plan", event.target.value)
+                    }
                   >
                     {plans.map((plan) => (
                       <option key={plan.id} value={plan.id}>
@@ -138,6 +339,9 @@ export default function AdminUsersPage() {
                       </option>
                     ))}
                   </select>
+                  <p className="text-muted mt-1 text-[11px]">
+                    {planName(user.planId)}
+                  </p>
                 </td>
                 <td>
                   {formatNumber(user.tokensUsed)}
@@ -209,14 +413,29 @@ export default function AdminUsersPage() {
                     >
                       {user.status === "active" ? "banir" : "reativar"}
                     </button>
+                    <button
+                      type="button"
+                      className="btn btn-xs btn-danger"
+                      disabled={user.id === currentUserId}
+                      title={
+                        user.id === currentUserId
+                          ? "Voce nao pode apagar a propria conta"
+                          : "Apagar o usuario e todos os dados dele"
+                      }
+                      onClick={() => removeUser(user.id, user.email)}
+                    >
+                      apagar
+                    </button>
                   </div>
                 </td>
               </tr>
             ))}
-            {!filtered.length ? (
+            {!filtered.length && !loading ? (
               <tr>
                 <td colSpan={8} className="text-muted">
-                  nenhum usuario encontrado
+                  {users.length
+                    ? "nenhum usuario corresponde a busca"
+                    : "nenhum usuario registrado"}
                 </td>
               </tr>
             ) : null}

@@ -6,20 +6,22 @@
     "node": ">=22.5.0"
   },
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
+    "dev": "node scripts/next.mjs dev",
+    "build": "node scripts/next.mjs build",
+    "start": "node scripts/next.mjs start",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "omega:setup": "node scripts/omega-setup.mjs",
     "omega:decensor": "node scripts/omega-decensor.mjs",
-    "omega:ollama": "node scripts/omega-ollama.mjs"
+    "omega:ollama": "node scripts/omega-ollama.mjs",
+    "db:migrate": "node scripts/migrate-sqlite-to-postgres.mjs"
   },
   "dependencies": {
     "@ai-sdk/google": "^2.0.106",
     "@ai-sdk/groq": "^2.0.59",
     "@ai-sdk/openai-compatible": "^1.0.59",
     "@ai-sdk/react": "^2.0.285",
+    "@neondatabase/serverless": "^1.2.0",
     "ai": "^5.0.282",
     "clsx": "^2.1.1",
     "next": "15.5.28",

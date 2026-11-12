@@ -14,7 +14,7 @@ export const GET = apiHandler(async (request: Request) => {
     ? Math.min(500, Math.max(1, Math.floor(requestedLimit)))
     : 100;
 
-  const rows = all<{
+  const rows = await all<{
     id: string;
     user_id: string;
     email: string;
@@ -32,7 +32,7 @@ export const GET = apiHandler(async (request: Request) => {
     userId ? [userId, limit] : [limit]
   );
 
-  const totals = all<{ total: number; requests: number }>(
+  const totals = await all<{ total: number; requests: number }>(
     `SELECT COALESCE(SUM(total_tokens), 0) AS total, COUNT(*) AS requests
      FROM usage_logs ${userId ? "WHERE user_id = ?" : ""}`,
     userId ? [userId] : []

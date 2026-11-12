@@ -16,7 +16,7 @@ type ExportContext = { params: Promise<{ id: string }> };
 export const GET = apiHandler<ExportContext>(async (request, context) => {
   const user = await requireUser();
   const { id } = await context.params;
-  const chat = getChat(id);
+  const chat = await getChat(id);
 
   if (!chat) {
     return Response.json(
@@ -32,7 +32,7 @@ export const GET = apiHandler<ExportContext>(async (request, context) => {
   }
 
   if (user.role !== "admin") {
-    const plan = getPlan(user.planId) ?? getPlan("free");
+    const plan = await getPlan(user.planId) ?? await getPlan("free");
 
     if (!plan || !hasCapability(plan, "export_chat")) {
       return Response.json(
@@ -47,7 +47,7 @@ export const GET = apiHandler<ExportContext>(async (request, context) => {
   }
 
   const format = new URL(request.url).searchParams.get("format") ?? "md";
-  const messages = getChatMessages(id);
+  const messages = await getChatMessages(id);
   const filename = `${slugify(chat.title) || "conversa"}-${chat.id.slice(-6)}.md`;
 
   if (format === "json") {

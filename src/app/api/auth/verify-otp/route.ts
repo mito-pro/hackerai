@@ -5,6 +5,8 @@ import { verifyOtpCode } from "@/lib/otp";
 import { get } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 import { usageSummary, syncCounters } from "@/lib/usage";
+import { sendWelcomeMail } from "@/lib/mail";
+import { getAppHost } from "@/lib/settings";
 import type { UserRow } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -17,7 +19,14 @@ const schema = z.object({
 export async function POST(request: Request) {
   try {
     const body = schema.parse(await request.json());
-    const result = verifyOtpCode(body.email, body.code);
+
+    const existingUser = await get<UserRow>(
+      "SELECT * FROM users WHERE email = ?",
+      [body.email.trim().toLowerCase()]
+    );
+    const isNewUser = !existingUser;
+
+    const result = await verifyOtpCode(body.email, body.code);
 
     if (!result.ok || !result.userId) {
       return NextResponse.json(
@@ -26,7 +35,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const user = get<UserRow>("SELECT * FROM users WHERE id = ?", [result.userId]);
+    const user = await get<UserRow>("SELECT * FROM users WHERE id = ?", [result.userId]);
     if (!user) {
       return NextResponse.json(
         { error: "user_not_found", message: "Usuario nao encontrado." },
@@ -42,8 +51,18 @@ export async function POST(request: Request) {
 
     await createSession(user.id, request.headers.get("user-agent"));
 
-    const fresh = syncCounters(user.id) ?? user;
-    const plan = getPlan(fresh.plan_id) ?? getPlan("free")!;
+    const fresh = await syncCounters(user.id) ?? user;
+    const plan = await getPlan(fresh.plan_id) ?? (await getPlan("free"))!;
+
+    if (isNewUser) {
+      sendWelcomeMail({
+        email: fresh.email,
+        name: fresh.name,
+        planName: plan.name,
+        role: fresh.role,
+        appHost: await getAppHost() || "hackerai-nexus.vercel.app",
+      }).catch(() => undefined);
+    }
 
     return NextResponse.json({
       ok: true,

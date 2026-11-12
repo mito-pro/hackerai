@@ -4,18 +4,21 @@ import { apiHandler } from "@/lib/errors";
 import { listChats, pruneChats } from "@/lib/chats";
 import { getPlan } from "@/lib/plans";
 import { planForUser, syncCounters } from "@/lib/usage";
+import { maintenanceBlock } from "@/lib/maintenance";
 
 export const runtime = "nodejs";
 
 export const GET = apiHandler(async () => {
   const user = await requireUser();
-  const fresh = syncCounters(user.id);
+  const blocked = await maintenanceBlock(user);
+  if (blocked) return blocked;
+  const fresh = await syncCounters(user.id);
   const plan = fresh
-    ? planForUser(fresh)
-    : getPlan(user.planId) ?? getPlan("free")!;
+    ? await planForUser(fresh)
+    : await getPlan(user.planId) ?? (await getPlan("free"))!;
 
-  pruneChats(user.id, plan.historyDays);
+  await pruneChats(user.id, plan.historyDays);
 
-  const chats = listChats(user.id);
+  const chats = await listChats(user.id);
   return NextResponse.json({ chats });
 });

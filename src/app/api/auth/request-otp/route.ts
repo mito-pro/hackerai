@@ -48,22 +48,15 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!result.emailSent && !result.devCode) {
-      return NextResponse.json(
-        {
-          error: "delivery_failed",
-          message:
-            "Nao foi possivel entregar o codigo por e-mail. Verifique as credenciais SMTP e tente novamente.",
-        },
-        { status: 502 }
-      );
-    }
-
+    // Sem SMTP o codigo e gerado e impresso nos logs do servidor; ele segue
+    // valido (TTL + tentativas). O cliente recebe ok e o operador usa o
+    // codigo do log para concluir o login.
     return NextResponse.json({
       ok: true,
       expiresAt: result.expiresAt,
       emailSent: result.emailSent,
       devCode: result.devCode,
+      deliveryFallback: !result.emailSent,
       retryAfter: RESEND_COOLDOWN_SECONDS,
     });
   } catch (error) {

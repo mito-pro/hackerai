@@ -6,12 +6,72 @@ import { getPlan, listPlans, upsertPlan, type Plan } from "@/lib/plans";
 import { PLAN_CAPABILITY_KEYS, type PlanCapability } from "@/lib/capabilities";
 import { z } from "zod";
 import { slugify } from "@/lib/utils";
+import {
+  PROVIDER_IDS,
+  PROVIDER_LABELS,
+  normalizeProviders,
+  type ProviderId,
+} from "@/lib/model-registry";
+import { resolvePlanModels } from "@/lib/plan-models";
+import { providerAvailability } from "@/lib/providers";
 
 export const runtime = "nodejs";
 
 export const GET = apiHandler(async () => {
   await requireAdmin();
-  return NextResponse.json({ plans: listPlans() });
+  const plans = await listPlans();
+  const availability = await providerAvailability();
+
+  const planModels: Record<
+    string,
+    {
+      providers: {
+        id: string;
+        label: string;
+        configured: boolean;
+        modelCount: number;
+      }[];
+      models: { id: string; label: string; provider: string; type: string }[];
+      missingProviders: string[];
+      modelCount: number;
+    }
+  > = {};
+
+  for (const plan of plans) {
+    const bundle = await resolvePlanModels(plan);
+    const countByProvider = new Map<ProviderId, number>();
+    for (const model of bundle.models) {
+      countByProvider.set(
+        model.provider,
+        (countByProvider.get(model.provider) ?? 0) + 1
+      );
+    }
+
+    planModels[plan.id] = {
+      providers: bundle.providers.map((provider) => ({
+        id: provider,
+        label: PROVIDER_LABELS[provider] ?? provider,
+        configured: availability[provider],
+        modelCount: countByProvider.get(provider) ?? 0,
+      })),
+      models: bundle.models.map((model) => ({
+        id: model.id,
+        label: model.label,
+        provider: model.provider,
+        type: model.type,
+      })),
+      missingProviders: bundle.missingProviders,
+      modelCount: bundle.models.length,
+    };
+  }
+
+  return NextResponse.json({
+    plans,
+    planModels,
+    availability,
+    providerLabels: PROVIDER_LABELS,
+    providerIds: PROVIDER_IDS,
+  });
 });
 
 const planSchema = z.object({
@@ -31,6 +91,10 @@ const planSchema = z.object({
     )
     .max(PLAN_CAPABILITY_KEYS.length)
     .default([]),
+  providers: z
+    .array(z.enum(PROVIDER_IDS as [ProviderId, ...ProviderId[]]))
+    .max(PROVIDER_IDS.length)
+    .default([]),
   priority: z.number().int().min(0).max(999).default(10),
   isDefault: z.boolean().default(false),
 });
@@ -49,19 +113,23 @@ export const PUT = apiHandler(async (request: Request) => {
 
   const data = parsed.data;
   const id = slugify(data.id || data.name) || `plan-${Date.now()}`;
-  const plan: Plan = { ...data, id };
+  const plan: Plan = {
+    ...data,
+    id,
+    providers: normalizeProviders(data.providers),
+  };
 
-  upsertPlan(plan);
+  await upsertPlan(plan);
 
   if (plan.isDefault) {
-    for (const other of listPlans()) {
+    for (const other of await listPlans()) {
       if (other.id !== id && other.isDefault) {
-        upsertPlan({ ...other, isDefault: false });
+        await upsertPlan({ ...other, isDefault: false });
       }
     }
   }
 
-  return NextResponse.json({ ok: true, plan: getPlan(id) });
+  return NextResponse.json({ ok: true, plan: await getPlan(id) });
 });
 
 export const DELETE = apiHandler(async (request: Request) => {

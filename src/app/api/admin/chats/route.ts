@@ -13,7 +13,7 @@ export const GET = apiHandler(async (request: Request) => {
     ? Math.min(300, Math.max(1, Math.floor(requestedLimit)))
     : 100;
 
-  const chats = all<{
+  const chats = await all<{
     id: string;
     user_id: string;
     email: string;

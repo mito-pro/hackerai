@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export const GET = apiHandler(async () => {
   await requireAdmin();
 
-  const totals = get<{
+  const totals = await get<{
     users: number;
     active: number;
     banned: number;
@@ -27,21 +27,23 @@ export const GET = apiHandler(async () => {
       (SELECT COALESCE(SUM(total_tokens), 0) FROM usage_logs) AS tokens`
   );
 
-  const daily = all<{ day: string; requests: number; tokens: number }>(
-    `SELECT substr(created_at, 1, 10) AS day,
+  const windowStart = new Date(Date.now() - 29 * 86_400_000).toISOString();
+  const daily = await all<{ day: string; requests: number; tokens: number }>(
+    `SELECT LEFT(created_at, 10) AS day,
             COUNT(*) AS requests,
             COALESCE(SUM(total_tokens), 0) AS tokens
      FROM usage_logs
-     WHERE created_at >= datetime('now', '-29 days')
-     GROUP BY day ORDER BY day ASC`
+     WHERE created_at >= ?
+     GROUP BY day ORDER BY day ASC`,
+    [windowStart]
   );
 
-  const byProvider = all<{ provider: string; requests: number; tokens: number }>(
+  const byProvider = await all<{ provider: string; requests: number; tokens: number }>(
     `SELECT provider, COUNT(*) AS requests, COALESCE(SUM(total_tokens), 0) AS tokens
      FROM usage_logs GROUP BY provider ORDER BY tokens DESC`
   );
 
-  const topUsers = all<{
+  const topUsers = await all<{
     id: string;
     email: string;
     name: string;
@@ -54,7 +56,7 @@ export const GET = apiHandler(async () => {
      FROM users u ORDER BY u.tokens_used DESC LIMIT 10`
   );
 
-  const recentUsers = all<{
+  const recentUsers = await all<{
     id: string;
     email: string;
     role: string;

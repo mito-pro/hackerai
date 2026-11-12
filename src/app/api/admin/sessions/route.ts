@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 export const GET = apiHandler(async () => {
   await requireAdmin();
-  const sessions = listSessions();
+  const sessions = await listSessions();
   return NextResponse.json({ sessions });
 });
 
@@ -19,6 +19,6 @@ export const DELETE = apiHandler(async (request: Request) => {
       { status: 400 }
     );
   }
-  const revoked = revokeSession(id);
+  const revoked = await revokeSession(id);
   return NextResponse.json({ ok: revoked });
 });

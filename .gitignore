@@ -54,3 +54,6 @@ tools/Uncensored-AI/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+.vercel
+.env*

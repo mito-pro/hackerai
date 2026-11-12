@@ -1,4 +1,5 @@
 import type { PlanCapability } from "./capabilities";
+import type { ProviderId } from "./model-registry";
 
 export type PlanDefinition = {
   id: string;
@@ -12,6 +13,7 @@ export type PlanDefinition = {
   features: string[];
   historyDays: number;
   capabilities: PlanCapability[];
+  providers: ProviderId[];
   priority: number;
   isDefault: boolean;
 };
@@ -33,6 +35,7 @@ export const DEFAULT_PLANS: PlanDefinition[] = [
     ],
     historyDays: 7,
     capabilities: [],
+    providers: ["opencode", "openrouter"],
     priority: 10,
     isDefault: true,
   },
@@ -53,6 +56,7 @@ export const DEFAULT_PLANS: PlanDefinition[] = [
     ],
     historyDays: 0,
     capabilities: ["multi_session", "export_chat", "priority_queue"],
+    providers: ["groq"],
     priority: 20,
     isDefault: false,
   },
@@ -74,6 +78,7 @@ export const DEFAULT_PLANS: PlanDefinition[] = [
     ],
     historyDays: 0,
     capabilities: ["multi_session", "export_chat", "priority_queue"],
+    providers: ["nvidia"],
     priority: 30,
     isDefault: false,
   },
@@ -116,6 +121,17 @@ export const DEFAULT_PLANS: PlanDefinition[] = [
       "multi_session",
       "export_chat",
       "priority_queue",
+      "uncensored",
+    ],
+    providers: [
+      "openrouter",
+      "groq",
+      "nvidia",
+      "cerebras",
+      "sambanova",
+      "opencode",
+      "vercel",
+      "ollama",
       "uncensored",
     ],
     priority: 100,

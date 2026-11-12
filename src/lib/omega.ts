@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
-import { MODELS, type ModelDef } from "./model-registry";
+import { MODELS, findCompatibleModel, type ModelDef } from "./model-registry";
 import { getProviderKeys } from "./settings";
 import { slugify } from "./utils";
 
@@ -83,13 +83,13 @@ export function hereticRepoStatus() {
   };
 }
 
-export function ollamaRootUrl() {
-  const base = getProviderKeys().ollamaBaseUrl.replace(/\/$/, "");
+export async function ollamaRootUrl() {
+  const base = (await getProviderKeys()).ollamaBaseUrl.replace(/\/$/, "");
   return base.replace(/\/v1$/, "");
 }
 
 export async function listOllamaTags(): Promise<string[]> {
-  const response = await fetch(`${ollamaRootUrl()}/api/tags`, {
+  const response = await fetch(`${await ollamaRootUrl()}/api/tags`, {
     cache: "no-store",
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -117,16 +117,18 @@ export function omegaModelDefs(tags: string[]): ModelDef[] {
     seen.add(id);
     models.push({
       id,
-      label: `OMEGA · ${tag}`,
+      label: `OMEGA :: ${tag}`,
       provider: "ollama",
       modelId: tag,
       context: 32_768,
       requiresKey: false,
       description: `Modelo local decensored (Heretic) :: ${tag}`,
       free: true,
+      type: "text",
       uncensored: true,
       requiresCapability: OMEGA_CAPABILITY,
     });
+    if (models.length >= 2) break;
   }
 
   return models;
@@ -154,6 +156,8 @@ export function invalidateOmegaCache() {
 export async function resolveModel(id: string): Promise<ModelDef | null> {
   const staticModel = MODELS.find((model) => model.id === id);
   if (staticModel) return staticModel;
+  const compatibleModel = findCompatibleModel(id);
+  if (compatibleModel) return compatibleModel;
   const omegaModels = await listOmegaModels();
   return omegaModels.find((model) => model.id === id) ?? null;
 }

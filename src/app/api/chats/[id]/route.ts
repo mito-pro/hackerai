@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { apiHandler } from "@/lib/errors";
 import { deleteChat, getChat, getChatMessages, parseParts } from "@/lib/chats";
+import { maintenanceBlock } from "@/lib/maintenance";
 
 export const runtime = "nodejs";
 
@@ -9,8 +10,10 @@ type ChatContext = { params: Promise<{ id: string }> };
 
 export const GET = apiHandler<ChatContext>(async (_request, context) => {
   const user = await requireUser();
+  const blocked = await maintenanceBlock(user);
+  if (blocked) return blocked;
   const { id } = await context.params;
-  const chat = getChat(id);
+  const chat = await getChat(id);
 
   if (!chat) {
     return NextResponse.json(
@@ -25,7 +28,7 @@ export const GET = apiHandler<ChatContext>(async (_request, context) => {
     );
   }
 
-  const messages = getChatMessages(id).map((row) => ({
+  const messages = (await getChatMessages(id)).map((row) => ({
     id: row.id,
     role: row.role,
     parts: parseParts(row.parts),
@@ -36,8 +39,10 @@ export const GET = apiHandler<ChatContext>(async (_request, context) => {
 
 export const DELETE = apiHandler<ChatContext>(async (_request, context) => {
   const user = await requireUser();
+  const blocked = await maintenanceBlock(user);
+  if (blocked) return blocked;
   const { id } = await context.params;
-  const chat = getChat(id);
+  const chat = await getChat(id);
 
   if (!chat) {
     return NextResponse.json(
@@ -52,6 +57,6 @@ export const DELETE = apiHandler<ChatContext>(async (_request, context) => {
     );
   }
 
-  const removed = deleteChat(id, chat.user_id);
+  const removed = await deleteChat(id, chat.user_id);
   return NextResponse.json({ ok: removed });
 });
