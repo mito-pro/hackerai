@@ -4,6 +4,7 @@ import { hmac, randomToken, safeEqual, sha256 } from "./crypto";
 import { ApiError } from "./errors";
 import { getPlan, hasCapability } from "./plans";
 import { adminEmailAllowlist } from "./admins";
+import { isBlockedUser } from "./blocklist";
 
 export const SESSION_COOKIE = "hackerai_session";
 const SESSION_DAYS = 30;
@@ -87,6 +88,14 @@ async function hydrateUser(claims: SessionClaims): Promise<UserRow | null> {
     claims.sub,
   ]);
   if (existing) return existing;
+
+  // Usuario apagado pelo administrador: a linha sumiu mas o cookie continua
+  // assinado. Sem a lista de bloqueio o INSERT abaixo recriaria a conta.
+  const blocked = await isBlockedUser({
+    userId: claims.sub,
+    email: claims.email,
+  });
+  if (blocked) return null;
 
   // Instancia serverless com /tmp proprio: recria a linha do usuario
   // a partir do cookie assinado para o login continuar valendo.

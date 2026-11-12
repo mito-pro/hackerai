@@ -4,6 +4,7 @@ import { apiHandler, badRequest, readJson } from "@/lib/errors";
 import { all, get, run } from "@/lib/db";
 import { getPlan, listPlans } from "@/lib/plans";
 import { logAudit, logPlanChange } from "@/lib/audit";
+import { blockUser, unblockEmail } from "@/lib/blocklist";
 import { generateId } from "@/lib/utils";
 
 import { sendAccountCreatedMail, sendPlanChangeMail } from "@/lib/mail";
@@ -124,6 +125,9 @@ export const POST = apiHandler(async (request: Request) => {
   const role = parsed.data.role ?? "user";
   const name = parsed.data.name?.trim() || email.split("@")[0].replace(/[._-]+/g, " ");
 
+  // Recriacao manual pelo admin: sai da lista de bloqueio.
+  await unblockEmail(email);
+
   run(
     `INSERT INTO users (id, email, name, role, plan_id, status, tokens_used, messages_today, period_start, day_start, created_at, last_login_at)
      VALUES (?, ?, ?, ?, ?, 'active', 0, 0, ?, ?, ?, NULL)`,
@@ -222,6 +226,9 @@ export const DELETE = apiHandler(async (request: Request) => {
   await run("DELETE FROM plan_history WHERE user_id = ?", [id]);
   await run("DELETE FROM sessions WHERE user_id = ?", [id]);
   await run("DELETE FROM otp_codes WHERE email = ?", [target.email]);
+  // Lista de bloqueio permanente: impede o cookie antigo de recriar a conta
+  // e impede o mesmo e-mail de gerar novo login/OTP.
+  await blockUser(id, target.email, "deleted");
   await run("DELETE FROM users WHERE id = ?", [id]);
 
   await logAudit({

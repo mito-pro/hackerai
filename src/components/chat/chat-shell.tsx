@@ -392,6 +392,20 @@ export function ChatShell({
 
           <div className="panel-flat mt-5 p-3">
             <p className="text-muted text-[11px] tracking-[0.16em] uppercase">
+              seguranca
+            </p>
+            <div className="mt-2 flex flex-col gap-2">
+              <Link
+                href="/scan/"
+                className="btn btn-xs text-left"
+              >
+                pentest de site
+              </Link>
+            </div>
+          </div>
+
+          <div className="panel-flat mt-5 p-3">
+            <p className="text-muted text-[11px] tracking-[0.16em] uppercase">
               conta
             </p>
             <div className="mt-2 flex flex-col gap-2">
@@ -472,6 +486,19 @@ function ChatPanel({
     onFinish: () => {
       onUsage();
       onComplete();
+    },
+    onError: (chatError) => {
+      // Usuario banido/apagado: servidor responde 401/"Sessao expirada".
+      // Desloga a interface para ele nao continuar no chat.
+      const raw = chatError as Error & { statusCode?: number; status?: number };
+      const httpStatus = raw.statusCode ?? raw.status;
+      const text = `${raw.message ?? ""}`;
+      if (
+        httpStatus === 401 ||
+        /sessao expirada|sessão expirada|unauthorized|401/i.test(text)
+      ) {
+        window.location.href = "/login/";
+      }
     },
   });
 

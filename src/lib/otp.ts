@@ -7,6 +7,7 @@ import { generateId } from "./utils";
 import { adminEmailAllowlist } from "./admins";
 import { getDefaultPlan } from "./plans";
 import { monthStart } from "./usage";
+import { isBlockedUser } from "./blocklist";
 
 export const CODE_TTL_MINUTES = 10;
 export const RESEND_COOLDOWN_SECONDS = 45;
@@ -18,7 +19,7 @@ const DEFAULT_APP_HOST = "localhost.run";
 export type OtpRequestResult = {
   ok: boolean;
   error?: string;
-  code?: "invalid_email" | "cooldown" | "rate_limit";
+  code?: "invalid_email" | "cooldown" | "rate_limit" | "account_deleted";
   devCode?: string;
   expiresAt?: string;
   emailSent?: boolean;
@@ -45,6 +46,14 @@ export async function requestOtpCode(
       ok: false,
       error: "Informe um e-mail valido.",
       code: "invalid_email",
+    };
+  }
+
+  if (await isBlockedUser({ email })) {
+    return {
+      ok: false,
+      error: "Conta apagada pelo administrador. Contate o suporte.",
+      code: "account_deleted",
     };
   }
 
@@ -214,6 +223,10 @@ export async function verifyOtpCode(
 ): Promise<VerifyResult> {
   const email = emailInput.trim().toLowerCase();
   const code = codeInput.trim();
+
+  if (await isBlockedUser({ email })) {
+    return { ok: false, error: "Conta apagada pelo administrador. Contate o suporte." };
+  }
 
   const record = await get<{
     id: string;

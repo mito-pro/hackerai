@@ -37,7 +37,12 @@ export async function POST(request: Request) {
     const result = await requestOtpCode(parsed.data.email, ip, host);
 
     if (!result.ok) {
-      const status = result.code === "invalid_email" ? 400 : 429;
+      const status =
+        result.code === "invalid_email"
+          ? 400
+          : result.code === "account_deleted"
+            ? 403
+            : 429;
       return NextResponse.json(
         {
           error: result.code ?? "otp_request_failed",
