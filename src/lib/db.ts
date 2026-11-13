@@ -152,6 +152,20 @@ const SCHEMA_STATEMENTS: string[] = [
     reason TEXT NOT NULL DEFAULT 'deleted',
     created_at TEXT NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS scan_history (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    user_email TEXT NOT NULL,
+    url TEXT NOT NULL,
+    score INTEGER NOT NULL DEFAULT 0,
+    findings_count INTEGER NOT NULL DEFAULT 0,
+    criticals INTEGER NOT NULL DEFAULT 0,
+    highs INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'ok',
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_scan_history_user ON scan_history(user_id, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_scan_history_created ON scan_history(created_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_payments_user ON payments(user_id, created_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status)`,
   `CREATE INDEX IF NOT EXISTS idx_upgrade_requests_user ON upgrade_requests(user_id, created_at DESC)`,

@@ -3,6 +3,7 @@ export const PLAN_CAPABILITIES = [
   { key: "export_chat", label: "Exportar conversas" },
   { key: "priority_queue", label: "Fila prioritaria" },
   { key: "uncensored", label: "Modelos sem censura (Heretic local)" },
+  { key: "pentest", label: "Pentest de sites (IA)" },
 ] as const;
 
 export type PlanCapability = (typeof PLAN_CAPABILITIES)[number]["key"];

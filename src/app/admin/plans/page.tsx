@@ -153,14 +153,20 @@ export default function AdminPlansPage() {
     setMessage("");
     setError("");
     setSaving(true);
+    const num = (value: unknown, fallback: number) => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    };
     const payload = {
       ...form,
-      price: Number(form.price),
-      monthlyTokens: Number(form.monthlyTokens),
-      dailyMessages: Number(form.dailyMessages),
-      maxContext: Number(form.maxContext),
-      historyDays: Number(form.historyDays),
-      priority: Number(form.priority),
+      name: form.name.trim(),
+      description: (form.description ?? "").trim(),
+      price: num(form.price, 0),
+      monthlyTokens: num(form.monthlyTokens, 0),
+      dailyMessages: num(form.dailyMessages, 0),
+      maxContext: num(form.maxContext, 8_000),
+      historyDays: num(form.historyDays, 7),
+      priority: num(form.priority, 10),
       features: features
         .split("\n")
         .map((line) => line.trim())

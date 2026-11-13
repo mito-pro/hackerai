@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import FxLayer from "@/components/fx/fx-layer";
+import BreachFX from "@/components/fx/breach-fx";
 
 const title = "HACKER_AI NEXUS :: Inteligencia artificial. Produtividade. Controle.";
 const description =
@@ -60,6 +61,7 @@ export default function RootLayout({
     <html lang="pt-BR">
       <body className="antialiased touch-manipulation">
         <FxLayer />
+        <BreachFX />
         <div className="scanline" />
         {children}
       </body>

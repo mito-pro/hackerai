@@ -78,12 +78,12 @@ const planSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1).max(40),
   category: z.string().max(40).default(""),
-  description: z.string().max(240).default(""),
+  description: z.string().max(600).default(""),
   price: z.preprocess((val) => (val === "" || val === undefined ? 0 : Number(val)), z.number().min(0)),
   monthlyTokens: z.preprocess((val) => (val === "" || val === undefined ? 0 : Number(val)), z.number().int().min(0)),
   dailyMessages: z.preprocess((val) => (val === "" || val === undefined ? 0 : Number(val)), z.number().int().min(0)),
   maxContext: z.preprocess((val) => (val === "" || val === undefined ? 8000 : Number(val)), z.number().int().min(100)),
-  features: z.array(z.string().max(80)).max(40).default([]),
+  features: z.array(z.string().max(160)).max(60).default([]),
   historyDays: z.preprocess((val) => (val === "" || val === undefined ? 7 : Number(val)), z.number().int().min(0).max(365).default(7)),
   capabilities: z
     .array(
@@ -105,8 +105,15 @@ export const PUT = apiHandler(async (request: Request) => {
   if (!raw.ok) return badRequest("Dados do plano invalidos.");
   const parsed = planSchema.safeParse(raw.data);
   if (!parsed.success) {
+    const issues = parsed.error.issues
+      .map((issue) => `${issue.path.join(".") || "payload"}: ${issue.message}`)
+      .join(" · ");
     return NextResponse.json(
-      { error: "bad_request", message: "Dados do plano invalidos." },
+      {
+        error: "bad_request",
+        message: `Dados do plano invalidos (${issues}).`,
+        issues,
+      },
       { status: 400 }
     );
   }

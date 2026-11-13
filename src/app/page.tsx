@@ -567,6 +567,13 @@ export default function Home() {
           <p>
             Base: vercel/ai-chatbot (Apache-2.0) + AI SDK + Next.js + SQLite.
           </p>
+          <button
+            type="button"
+            className="btn btn-xs self-start sm:self-auto"
+            onClick={() => window.dispatchEvent(new CustomEvent("nexus:breach"))}
+          >
+            simulacao de intrusao
+          </button>
         </div>
       </footer>
     </div>
